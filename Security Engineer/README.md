@@ -24,6 +24,8 @@ The follow section we will breakdown the exam guide into areas of study.
 * Configuring Google Cloud Directory Sync
 * Management of super administrator account
 
+![IAM Descision Tree](images/IAM-Descision-Tree.png)
+
 ##### Cloud Identity
 
 Cloud Identity is an Identity as a Service (IDaaS) and enterprise mobility management (EMM) product. It offers the identity services and endpoint administration that are available in G Suite as a stand-alone product. As an administrator, you can use Cloud Identity to manage your users, apps, and devices from a central location—the Google Admin console.
@@ -91,8 +93,23 @@ Cloud Directory Sync queries the LDAP directory to retrieve the necessary inform
 
 #### Managing Super Admin
 
+Super admin accounts have irrevocable administrative permissions that we do not recommended using in the day-to-day administration of your organization. Best practices for managing super admins are as follows:
 
+* Create a super admin email address
+  * Create a new email address that is not specific to a particular user as the G Suite or Cloud Identity super admin account. This account should be further secured with multi-factor authentication, and could be used as an emergency recovery tool.
 
+* Designate organization admins
+  * This role has a smaller set of permissions that are designed to manage your day to day organization operations. You should also create a private Google Cloud administrator group in your G Suite or Cloud Identity super admin account. Add your organization administrator users to this group, but not your super admin user. Grant this group the Organization Administrator IAM role or a limited subset of the role's permissions.
+  * We recommend keeping your super admin account separate from your organization administrator group.
+
+* Set appropriate roles
+* Discourage the use of Super Admin
+  * Enforce multi-factor authentication on your super admin accounts as well as all accounts that have elevated privileges.
+  * Use a security key or other physical authentication device to enforce two-step verification.
+  * For the initial super admin account, ensure that the security key is kept in a safe place, preferably at your physical location.
+
+* Setup Multiple Super Admin Accounts
+  * A business should have more than one super admin account, each managed by a separate individual. If one account is lost or compromised, another super admin can perform critical tasks while the other account is recovered.
 
 #### 1.2 Managing user accounts:
 
@@ -153,6 +170,90 @@ Other Examples can be found [here](https://cloud.google.com/iam/docs/resource-hi
 User lifecycle management—the ability to automatically add and remove users to applications—is one of the key features of [Cloud Identity](https://cloud.google.com/identity), Google Cloud’s identity, access, and device management solution, will allow you to provision and de-provision users and provide them access to a multitude of third-party applications directly from the Cloud Identiy or GSuite Admin Console. 
 
 This is done by enabling Single-Sign-On (SSO) on the application to use Google Cloud Identity as the Identity Provider (IdP)
+
+### Managing Service Accounts
+When using an application to access Cloud Platform APIs, we recommend you use a service account, an identity whose credentials your application code can use to access other GCP services. You can access a service account from code running on GCP, in your on-premises environment or even another cloud.
+
+Service accounts differ from user accounts in a few key ways:
+
+  * Service accounts do not have passwords, and cannot log in via browsers or cookies.
+  * Service accounts are associated with private/public RSA key-pairs that are used for authentication to Google.
+  * IAM permissions can be granted to allow other users (or other service accounts) to impersonate a service account.
+  * Service accounts are not members of your G Suite domain, unlike user accounts. For example, if you share assets with all members in your G Suite domain, they will not be shared with service accounts. Similarly, any assets created by a service account cannot be owned or managed by G Suite or Cloud Identity admins. This doesn't apply when using domain-wide delegation, because API calls are authorized as the impersonated user, not the service account itself.
+
+GCP provides the [IAM Recommender](https://cloud.google.com/iam/docs/recommender-overview) tool for providing insights and recommendations on enforcing least priviledge on you IAM accounts.
+
+**Best Practices**
+Best practice for managing service accounts can be found [here](https://cloud.google.com/blog/products/gcp/help-keep-your-google-cloud-service-account-keys-safe) and [here](https://cloud.google.com/iam/docs/understanding-service-accounts#best_practices) also.
+
+One key best practice for is for key rotation is to setup a cron job to rotate keys and store them in a Cloud Storage Bucket which developers have READ access to and have them download the updated keys daily from there.
+
+**GCloud SDK Snippets**
+Use _**add-iam-policy-binding**_ to add a role to a member 
+_`gcloud group add-iam-policy-binding resource --member=member --role=role-id`_
+
+**Example**:
+```
+gcloud projects add-iam-policy-binding my-project --member=user:my-user@example.com --role=roles/viewer 
+```
+
+Use _**remove-iam-policy-binding**_ to remove a role from a member
+_`gcloud group remove-iam-policy-binding resource --member=member --role=role-id`_
+**Example:**
+```
+gcloud projects remove-iam-policy-binding my-project --member=user:my-user@example.com --role=roles/viewer
+```
+
+There are two types of service account keys:
+* GCP-managed keys. 
+  * These keys are used by Cloud Platform services such as App Engine and Compute Engine. They cannot be downloaded, and are automatically rotated and used for signing for a maximum of two weeks. The rotation process is probabilistic; usage of the new key will gradually ramp up and down over the key's lifetime. We recommend caching the public key set for a service account for at most 24 hours to ensure that you always have access to the current key set.
+* User-managed keys. 
+  * These keys are created, downloadable, and managed by users. They expire 10 years from creation, and cease authenticating successfully when they are deleted from the service account.
+    * https://cloud.google.com/iam/docs/understanding-service-accounts#managing_service_account_keys
+
+Details on auditing service accounts and keys
+can be found [here](https://cloud.google.com/iam/docs/audit-logging).
+
+Automating the rotation of user-managed service account keys can be done leveraging the [Keyrotator python app](https://github.com/Googlecloudplatform/keyrotator)
+
+Typically, service accounts are used in scenarios such as:
+
+* Running workloads on virtual machines (VMs).
+* Running workloads on on-premises workstations or data centers that call Google APIs.
+* Running workloads which are not tied to the lifecycle of a human user.
+
+**GCloud CLI Snippets**
+Creating a service account:
+
+```
+gcloud iam service-accounts create sa-name --description="sa-description" --display-name="sa-display-name"
+```
+
+Creating a service account key:
+
+```
+gcloud iam service-accounts keys create ~/key.json --iam-account sa-name@project-id.iam.gserviceaccount.com
+```
+
+This command generates a key json that will look like the following:
+
+```
+{
+  "type": "service_account",
+  "project_id": "project-id",
+  "private_key_id": "key-id",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nprivate-key\n-----END PRIVATE KEY-----\n",
+  "client_email": "service-account-email",
+  "client_id": "client-id",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://accounts.google.com/o/oauth2/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/service-account-email"
+}
+```
+
+
+
 
 
 [^1]: Taken from the GCP Security Engineer Documentation (https://cloud.google.com/certification/cloud-security-engineer)
