@@ -345,6 +345,20 @@ The resource nodes that are in the hierarchy below the Organization Node are eva
 
 Best practices for IAM Security can be found [here](https://cloud.google.com/iam/docs/using-iam-securely)
 
+You can set an Cloud IAM policy at the organization level, the folder level, the project level, or (in some cases) the resource level. Resources inherit the policies of the parent node. If you set a policy at the Organization level, it is inherited by all its child folders and projects, and if you set a policy at the project level, it is inherited by all its child resources.
+The effective policy for a resource is the union of the policy set on the resource and the policy inherited from its ancestors. This inheritance is transitive. In other words, resources inherit policies from the project, which inherit policies from the organization. Therefore, the organization-level policies also apply at the resource level.
+
+Trust and security boundaries within GCP projects
+The project resource is the base-level organizing entity. Organizations and folders may contain multiple projects. A project is required to use Google Cloud, and forms the basis for creating, enabling, and using all Google Cloud services, managing APIs, enabling billing, adding and removing collaborators, and managing permissions.
+https://cloud.google.com/resource-manager/docs/access-control-proj
+You can place a lien upon a project to block the project's deletion until you remove the lien. This can be useful to protect projects of particular importance.
+```
+gcloud alpha resource-manager liens create
+  --restrictions=resourcemanager.projects.delete
+  --reason="Super important production system"
+```
+
+
 #### Managing IAM permissions with primitive, predefined, and custom roles
 
 There are three kinds of roles in IAM:
@@ -381,7 +395,14 @@ In most cases IAMs are the recommended approach for giving access to resources.
   * _(IAM) Storage Legacy Bucket Owner = (ACL) Bucket Owner_
 
 * IAMs
-  * 
+  * https://cloud.google.com/storage/docs/access-control/iam#overview
+  * https://cloud.google.com/storage/docs/access-control/iam-permissions
+  * Cloud IAM allows you to control who has access to the resources in your Google Cloud project. Resources include Cloud Storage buckets and objects stored within buckets, as well as other Google Cloud entities such as Compute Engine instances.
+  * The set of access rules you apply to a resource is called a Cloud IAM policy. A Cloud IAM policy applied to your project defines the actions that users can take on all objects or buckets within your project. A Cloud IAM policy applied to a single bucket defines the actions that users can take on that specific bucket and objects within it.
+    * For example, you can create a Cloud IAM policy for one of your buckets that gives one user administrative control of that bucket. Meanwhile, you can add another user to your project-wide Cloud IAM policy that gives that user the ability to view objects in any bucket of your project.
+  * Roles are a bundle of one or more permissions. For example, the Storage Object Viewer role contains the permissions storage.objects.get and storage.objects.list. You assign roles to members, which allows them to perform actions on the buckets and objects in your project.
+  * Granting roles at the bucket level does not affect any existing roles that you granted at the project level, and vice versa. For example, say you want to give a user permission to read objects in any bucket but create objects only in one specific bucket. To achieve this, give the user the Storage Object Viewer role at the project level, thus allowing the user to read any object stored in any bucket in your project, and give the user the Storage Object Creator role at the bucket level for a specific bucket, thus allowing the user to create objects only in that bucket. Some roles can be used at both the project level and the bucket level. When used at the project level, the permissions they contain apply to all buckets and objects in the project. When used at the bucket level, the permissions only apply to a specific bucket and the objects within it. Examples of such roles are Storage Admin, Storage Object Viewer, and Storage Object Creator. Some roles can only be applied at one level. For example, you can only apply the Viewer role at the project level, while you can only apply the Storage Legacy Object Owner role at the bucket level.
+  * All other bucket-level Cloud IAM roles, and all project-level Cloud IAM roles, work independently from ACLs. For example, if you give a user the Storage Object Viewer role, the ACLs remain unchanged. 
 
 
 
