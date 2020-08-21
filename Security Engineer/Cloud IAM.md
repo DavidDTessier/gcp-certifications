@@ -1,37 +1,7 @@
-##### Cloud Identity
+![Logo](../images/GCP-Sec-Eng.png)
 
-Cloud Identity is an Identity as a Service (IDaaS) and enterprise mobility management (EMM) product. It offers the identity services and endpoint administration that are available in G Suite as a stand-alone product. As an administrator, you can use Cloud Identity to manage your users, apps, and devices from a central location—the Google Admin console.
-
-There are free and premium editions of Cloud Identity. [Compare the differences](https://support.google.com/cloudidentity/answer/7431902)
-
-**If you're a G Suite admin**
-* G Suite licenses are required only for users who need certain G Suite services, like Gmail. To manage users who don't need any G Suite services, you can create free Cloud Identity accounts for them.  
-* In most cases, Cloud Identity Free edition users have the same identity services as G Suite users, such as single sign-on (SSO) and 2-Step Verification (2SV).
-
-**If you're a GCP admin**
-* Consumer accounts, such as personal Gmail accounts or consumer accounts with work email IDs, are unmanaged accounts and are outside of your control. If developers in your organization use unmanaged accounts to use GCP resources, you can create Cloud Identity accounts to manage these users.
-* You can create free Cloud Identity accounts for each user, separate from paid G Suite accounts. By doing so, you can manage all users across your entire domain from the Google Admin console.
-* Cloud Identity Free edition provides common identity services, such as SSO.
-
-You can manage Cloud Identity via the [REST API](https://cloud.google.com/identity/docs/reference/rest)
-
-_Cloud Identity APIs_
-* [Groups API](https://cloud.google.com/identity/docs/groups)
-  * Allows you to create and manage different types of groups, each of which supports different features, as well as their memberships.
-
-Google Recommends leveraging there [Client Libraries](https://cloud.google.com/apis/docs/client-libraries-explained) in order to interact with there APIs.
-
-Enforce multi-factor authentication
-* https://cloud.google.com/identity/solutions/enforce-mfa
-
-Enable SSO for cloud apps:
-* https://cloud.google.com/identity/solutions/enable-sso
-
-Secure corporate access on personal devices:
-* https://cloud.google.com/identity/solutions/secure-corp-on-personal-devices
-
-#### Identity and access management (IAM)
-
+# Cloud IAM
+## Overview
 Identity and access management (IAM) is the practice of granting the right individuals access to the right resources for the right reasons. This series explores IAM and the individuals who are subject to it, including the following:
 
 * **Corporate identities**: The identities that you manage for employees of your organization. These identities are used for signing in to workstations, accessing email, or using corporate applications. Corporate identities might also include non-employees such as contractors or partners that need access to corporate resources.
@@ -45,47 +15,11 @@ You might need to grant access to the following resources:
 
 ![IAM Descision Tree](images/IAM-Descision-Tree.png)
 
-#### Managing Customer Identities
+### Managing Customer Identities
 
 Customer identities are the identities that you manage for users to let them interact with your website or customer-facing applications. Managing customer identities and their access is also referred to as customer identity and access management (CIAM).
 
 By leveraging Google's [Identity Platfrom](https://cloud.google.com/identity-platform) you can control access to your business application. It provides Single-Sign-On (SSO) capabilities. This is done by building [authentication workflows](https://cloud.google.com/identity-platform/docs/concepts-authentication) into the application using easy-to-use SDK functionality.
-
-#### Google Cloud Directory and Directory Sync
-
-Google Cloud Directory Sync enables administrators to synchronize users, groups and other data from an Active Directory/LDAP service to their Google Cloud domain directory.
-
-![GC Directory Sync](images/active-directory-as-idp.svg)
-
-Google Cloud uses Google identities for authentication and access management. Manually maintaining Google identities for each employee can add unnecessary management overhead when all employees already have an account in Active Directory. By federating user identities between Google Cloud and your existing identity management system, you can automate the maintenance of Google identities and tie their lifecycle to existing users in Active Directory.
-
-Cloud Directory Sync queries the LDAP directory to retrieve the necessary information from the directory and uses the [Directory API](https://developers.google.com/admin-sdk/directory/) to add, modify, or delete users in your Cloud Identity or G Suite account.
-
-[Preparing your Cloud Identity or G Suit account](https://cloud.google.com/architecture/identity/federating-gcp-with-active-directory-synchronizing-user-accounts#configuring_cloud_identity)
-
-[Configuring user provisioning](https://cloud.google.com/architecture/identity/federating-gcp-with-active-directory-synchronizing-user-accounts#configuring_user_provisioning)
-
-#### Managing Super Admin
-
-Super admin accounts have irrevocable administrative permissions that we do not recommended using in the day-to-day administration of your organization. Best practices for managing super admins are as follows:
-
-* Create a super admin email address
-  * Create a new email address that is not specific to a particular user as the G Suite or Cloud Identity super admin account. This account should be further secured with multi-factor authentication, and could be used as an emergency recovery tool.
-
-* Designate organization admins
-  * This role has a smaller set of permissions that are designed to manage your day to day organization operations. You should also create a private Google Cloud administrator group in your G Suite or Cloud Identity super admin account. Add your organization administrator users to this group, but not your super admin user. Grant this group the Organization Administrator IAM role or a limited subset of the role's permissions.
-  * We recommend keeping your super admin account separate from your organization administrator group.
-
-* Set appropriate roles
-* Discourage the use of Super Admin
-  * Enforce multi-factor authentication on your super admin accounts as well as all accounts that have elevated privileges.
-  * Use a security key or other physical authentication device to enforce two-step verification.
-  * For the initial super admin account, ensure that the security key is kept in a safe place, preferably at your physical location.
-
-* Setup Multiple Super Admin Accounts
-  * A business should have more than one super admin account, each managed by a separate individual. If one account is lost or compromised, another super admin can perform critical tasks while the other account is recovered.
-
-#### 1.2 Managing user accounts:
 
 #### Designing identity roles at the project and organization level
 
@@ -118,12 +52,58 @@ The following diagram illustrates the preceding example.
 
 Other Examples can be found [here](https://cloud.google.com/iam/docs/resource-hierarchy-access-control)
 
-**Best Practices**
-* Mirror your Google Cloud resource hierarchy structure to your organization structure. The Google Cloud resource hierarchy should reflect how your company is organized, whether it's a startup, a SME, or a large corporation. A startup may start out with a flat resource hierarchy with no organization resource. When more people start collaborating on projects and the number of projects increase, getting an organization resource might make sense. An organization resource is recommended for larger companies with multiple departments and teams where each team is responsible for their own set of applications and services.
 
-* Use projects to group resources that share the same trust boundary. For example, resources for the same product or microservice can belong to the same project.
+## Service Accounts
 
-* Set policies at the organization level and at the project level rather than at the resource level. As new resources are added, you may want them to automatically inherit policies from their parent resource. For example, as new virtual machines are added to the project through auto-scaling, they automatically inherit the policy on the project.
+## Cloud Identity
+
+Cloud Identity is an Identity as a Service (IDaaS) and enterprise mobility management (EMM) product. It offers the identity services and endpoint administration that are available in G Suite as a stand-alone product. As an administrator, you can use Cloud Identity to manage your users, apps, and devices from a central location—the Google Admin console.
+
+There are free and premium editions of Cloud Identity. [Compare the differences](https://support.google.com/cloudidentity/answer/7431902)
+
+**If you're a G Suite admin**
+* G Suite licenses are required only for users who need certain G Suite services, like Gmail. To manage users who don't need any G Suite services, you can create free Cloud Identity accounts for them.  
+* In most cases, Cloud Identity Free edition users have the same identity services as G Suite users, such as single sign-on (SSO) and 2-Step Verification (2SV).
+
+**If you're a GCP admin**
+* Consumer accounts, such as personal Gmail accounts or consumer accounts with work email IDs, are unmanaged accounts and are outside of your control. If developers in your organization use unmanaged accounts to use GCP resources, you can create Cloud Identity accounts to manage these users.
+* You can create free Cloud Identity accounts for each user, separate from paid G Suite accounts. By doing so, you can manage all users across your entire domain from the Google Admin console.
+* Cloud Identity Free edition provides common identity services, such as SSO.
+
+You can manage Cloud Identity via the [REST API](https://cloud.google.com/identity/docs/reference/rest)
+
+_Cloud Identity APIs_
+* [Groups API](https://cloud.google.com/identity/docs/groups)
+  * Allows you to create and manage different types of groups, each of which supports different features, as well as their memberships.
+
+Google Recommends leveraging there [Client Libraries](https://cloud.google.com/apis/docs/client-libraries-explained) in order to interact with there APIs.
+
+Enforce multi-factor authentication
+* https://cloud.google.com/identity/solutions/enforce-mfa
+
+Enable SSO for cloud apps:
+* https://cloud.google.com/identity/solutions/enable-sso
+
+Secure corporate access on personal devices:
+* https://cloud.google.com/identity/solutions/secure-corp-on-personal-devices
+
+## Google Cloud Directory and Directory Sync
+
+Google Cloud Directory Sync enables administrators to synchronize users, groups and other data from an Active Directory/LDAP service to their Google Cloud domain directory.
+
+![GC Directory Sync](images/active-directory-as-idp.svg)
+
+Google Cloud uses Google identities for authentication and access management. Manually maintaining Google identities for each employee can add unnecessary management overhead when all employees already have an account in Active Directory. By federating user identities between Google Cloud and your existing identity management system, you can automate the maintenance of Google identities and tie their lifecycle to existing users in Active Directory.
+
+Cloud Directory Sync queries the LDAP directory to retrieve the necessary information from the directory and uses the [Directory API](https://developers.google.com/admin-sdk/directory/) to add, modify, or delete users in your Cloud Identity or G Suite account.
+
+[Preparing your Cloud Identity or G Suit account](https://cloud.google.com/architecture/identity/federating-gcp-with-active-directory-synchronizing-user-accounts#configuring_cloud_identity)
+
+[Configuring user provisioning](https://cloud.google.com/architecture/identity/federating-gcp-with-active-directory-synchronizing-user-accounts#configuring_user_provisioning)
+
+#### 1.2 Managing user accounts:
+
+
 
 * Grant roles to a Google group instead of to individual users when possible. It is easier to manage members in a Google group than to update an IAM policy. Make sure to control the ownership of the Google group used in IAM policies.
 
@@ -293,70 +273,15 @@ You can select different levels of 2SV enforcement:
 
 ### Managing Authorization and Access Control
 
-The following diagram outlines a sample resource outline in Google Cloud:
-![Resource Outline](images/cloud-folders-hierarchy.png).
-
-The _Origanization_ node is the root node and all access control policies will trickle down from there. Org admins can set [Originizational Policies](https://cloud.google.com/resource-manager/docs/organization-policy/overview), which will control access to folders and/or projects at the organization level. 
-![Org Policy](images/org-policy-concepts.svg)
-
-Best Practices For Organizations can be found [here](https://cloud.google.com/docs/enterprise/best-practices-for-enterprise-organizations).
-
-* Organization:
-  * Highest unit
-  * Using GSuite and Cloud Identity
-  * Common place to register your domain as the org name
-* Folders:
-  * Orgs can have one or more folders
-  * Common practice is to have folders represent departments in an org
-  * Max 100 folders under a single folder or up to four levels of folder nesting
-* Projects:
-  * A unit of resource management below folders
-  * Contains a set of users, API permission, billing information and provisioned resources
-  * Identified by their project ID which should be unique to each org
-  * Auto-generated by GCP
-    * Cloud Deployment Manager
-    * Terraform
-    * Ansible
-  * Users and roles specified per project
-* Resources:
-  * Instance of offerings and services of GCP
-  * Roles are defined to manage access
 
 
-#### Resource Hierarchy
-When you set an organization policy on a resource hierarchy node, all descendants of that resource hierarchy node inherit the organization policy by default. If you set an organization policy at the root organization node, then those restrictions are inherited by all child folders, projects, and resources.
-You can set custom organization policy on child nodes, which will overwrite or merge with the inherited policy based on the rules of hierarchy evaluation.
-
-Ex:
-![Resource Hierarchy](images/org-policy-inheritance.svg)
-
-A **Constraint** is a definition of the behaviors that are controlled by an organization policy.
-
-The resource nodes that are in the hierarchy below the Organization Node are evaluated as follows:
-
-* Resource 1 defines a custom policy that sets inheritFromParent to TRUE and allows blue diamond. The policy from the Organization Node is inherited and merged with the custom policy, and the effective policy evaluates to allow red square, green circle, and blue diamond.
-
-* Resource 2 defines a custom policy that sets inheritFromParent to TRUE and denies green circle. Deny values always take precedence during policy reconciliation. The policy from the Organization Node is inherited and merged with the custom policy, and the effective policy evaluates to allow only red square.
-
-* Resource 3 defines a custom policy that sets inheritFromParent to FALSE and allows yellow hexagon. The policy from the Organization Node is not inherited, so the effective policy evaluates to only allow yellow hexagon.
-
-* Resource 4 defines a custom policy that sets inheritFromParent to FALSE and includes the restoreDefault value. The policy from the Organization Node is not inherited, and the default constraint behavior is used, so the effective policy evaluates to allow all.
 
 
 Best practices for IAM Security can be found [here](https://cloud.google.com/iam/docs/using-iam-securely)
 
-You can set an Cloud IAM policy at the organization level, the folder level, the project level, or (in some cases) the resource level. Resources inherit the policies of the parent node. If you set a policy at the Organization level, it is inherited by all its child folders and projects, and if you set a policy at the project level, it is inherited by all its child resources.
-The effective policy for a resource is the union of the policy set on the resource and the policy inherited from its ancestors. This inheritance is transitive. In other words, resources inherit policies from the project, which inherit policies from the organization. Therefore, the organization-level policies also apply at the resource level.
 
-Trust and security boundaries within GCP projects
-The project resource is the base-level organizing entity. Organizations and folders may contain multiple projects. A project is required to use Google Cloud, and forms the basis for creating, enabling, and using all Google Cloud services, managing APIs, enabling billing, adding and removing collaborators, and managing permissions.
-https://cloud.google.com/resource-manager/docs/access-control-proj
-You can place a lien upon a project to block the project's deletion until you remove the lien. This can be useful to protect projects of particular importance.
-```
-gcloud alpha resource-manager liens create
-  --restrictions=resourcemanager.projects.delete
-  --reason="Super important production system"
-```
+
+
 
 
 #### Managing IAM permissions with primitive, predefined, and custom roles

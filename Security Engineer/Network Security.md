@@ -275,8 +275,54 @@ Cloud NAT does not implement unsolicited inbound connections from the internet. 
 Cloud DNS
 DNSSEC is a feature of the Domain Name System that authenticates responses to domain name lookups. It does not provide privacy protections for those lookups, but prevents attackers from manipulating or poisoning the responses to DNS requests.
 
+**Terminalogy**
+* Managed Zones:
+  * This zonr holds DNS records for the same DNS name suffix (example.com, for example). There can be multiple managed zones in a GCP project, but they all must have a unique name.In Cloud DNS, the managed zone is the resource that models a [DNS zone](https://en.wikipedia.org/wiki/DNS_zone). All records in a managed zone are hosted on the same Google-operated name servers. These name servers respond to DNS queries against your managed zone according to how you configure the zone. 
+* Public Zones:
+  * This zone is visible to the internet. Cloud DNS has public authoritative name servers that respond to queries about public zones regardless of where the queries originate. You can create DNS records in a public zone to publish your service on the internet. For example, you might create the following record in a public zone example.com for your public web site www.example.com.
+
+ex: 
+|DNS Name|Type|TTL (seconds)|Data|
+|--------|-----|------------|-------|
+|www.example.com|	A|	300	198.51.100.0|
+
+Cloud DNS assigns a set of name servers when a public zone is created. For the DNS records in a public zone to be resolvable over the internet, you must update the name server setting of your domain registration at your registrar.
+
+* Private Zones:
+  * This zone enables you to manage custom domain names for your virtual machines, load balancers, and other Google Cloud resources without exposing the underlying DNS data to the public internet. A private zone is a container of DNS records that can only be queried by one or more VPC networks that you authorize. A private zone can only be queried by resources in the same project where it is defined. The VPC networks that you authorize must be located in the same project as the private zone. If you need to query records hosted in managed private zones in other projects, use DNS peering.
+  * Private zones do not support DNS security extensions (DNSSEC) or custom resource record sets of type NS.
+
+ex:
+|DNS Name|	Type|	TTL (seconds)|	Data|
+|--------|------|----------------|------|
+|db-01.dev.gcp.example.com|	A|	5|	10.128.1.35|
+|instance-01.dev.gcp.example.com|	A|	50|	10.128.1.10|
+* Forwarding Zones:
+  * A forwarding zone is a type of Cloud DNS managed private zone that sends requests for that zone to the IP addresses of its forwarding targets. For more information, see DNS forwarding methods.
+
+For more details on Cloud DNS go [here](https://cloud.google.com/dns/docs/overview)
+
+## Domain Name System Security Extensions (DNSSEC)
+DNSSEC is a feature of the Domain Name System that authenticates responses to domain name lookups. It does not provide privacy protections for those lookups, but prevents attackers from manipulating or poisoning the responses to DNS requests.
+
 DNSSec needs to be enabled in the following three places:
 
 1. The DNS zone for your domain must serve special DNSSEC records for public keys (DNSKEY), signatures (RRSIG), and non-existence (NSEC, or NSEC3 and NSEC3PARAM) to authenticate your zone's contents. Cloud DNS manages this automatically if you [enable DNSSEC for a zone](https://cloud.google.com/dns/docs/dnssec-config#enabling).
 2. The top-level domain registry (for example.com, this would be .COM) must have a DS record that authenticates a DNSKEY record in your zone. Do this by activating DNSSEC at your domain registrar.
 3. For full DNSSEC protection, clients must use a DNS resolver that validates signatures for DNSSEC-signed domains. You can enable validation for individual systems or the local DNS resolvers (Refer to the appendices in this PDF guide). You can also configure systems to use public resolvers that validate DNSSEC, notably Google Public DNS and Verisign Public DNS.
+
+You can enabel DNSSec on Cloud DNS managed zones through the console window as well as throught the Command Line Interface(CLI) tools:
+
+On an existing managed zone:
+```
+gcloud dns managed-zones update EXAMPLE_ZONE --dnssec-state on
+```
+
+At creation time:
+```
+gcloud dns managed-zones create EXAMPLE_ZONE \
+    --description "Signed Zone" --dns-name myzone.example.com --dnssec-state on
+```
+
+### Verifying DNSSEC deployment
+You can use [DNSViz](http://dnsviz.net/),the [Verisign DNSSEC debugger](http://dnssec-debugger.verisignlabs.com/), or [Zonemaster](https://zonemaster.net/) to verify correct deployment of your DNSSEC-enabled zone (the latter two can also be used before you update your registrar with your Cloud DNS name servers or DS record to activate DNSSEC). An example of a domain that is properly configured for DNSSEC is example.com; you can see it with DNSViz at http://dnsviz.net/d/www.example.com/dnssec/.
