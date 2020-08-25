@@ -112,7 +112,7 @@ In addition to firewall rules that you create, Google Cloud has other rules that
 
 * Google Cloud doesn't allow certain IP protocols, such as egress traffic on TCP port 25 within a VPC network.
 * Google Cloud always allows communication between a VM instance and its corresponding metadata server at 169.254.169.254. 
-* Every network has two implied firewall rules that permit outgoing connections and block incoming connections. Firewall rules that you create can override these implied rules.
+* Every network has two implied firewall rules that permit outgoing connections and block incoming connections. Firewall rules that you create can override these implied rules. These implied rules apply to all instances in the network.
 * The default network is pre-populated with firewall rules that you can delete or modify.
 
 Firewall rules only support IPv4 connections. 
@@ -189,6 +189,17 @@ gcloud compute firewall-rules update NAME \
     [--enable-logging | --no-enable-logging]
 ```
 
+### GCP Allows Blocked Traffic
+The following is network traffic that is allways blocked by GCP and firewall rules **CANNOT** unblock them:
+
+|Blocked Traffic| Applies To|
+|---------------|-----------|
+| GRE Traffic| all sources, all destinations, including among instances using internal ip addresses, unless explicitly allowed through protocol forwarding|
+| Protocols othan than TCP, UDP, ICMP, and IPIP| Traffic between: * instances and the internet * instances if they are addressed with external IPs * instances if a load balancer with an external IP is involved |
+| Egress Traffic on TCP port 25 (SMTP) | Traffic From: * instances to the internet * instances to other instances addressed by external IPs |
+| Egress Traffic on TCP port 465 or 587 (SMTP over SSL/TLS) | Traffic from: * instances to the internet, except for traffic destined for known Google SMTP Servers * instances to other instances addressed by external IPs |
+
+
 **Filter by service account vs network tag**
 If you need strict control over how firewall rules are applied to VMs, use target service accounts and source service accounts instead of target tags and source tags:
 
@@ -250,7 +261,7 @@ Shared VPC Admins have full control over the resources in the host project, incl
 * Security Admin:
   * A Shared VPC Admin can define a Security Admin by granting an IAM member the Security Admin `compute.securityAdmin` role to the host project. Security Admins manage firewall rules and SSL certificates.
 
-**Project Strucuture**
+**Project Structure**
 Shared VPC connects projects within the same organization. Participating host and service projects cannot belong to different organizations. Linked projects can be in the same or different folders, but if they are in different folders the admin must have Shared VPC Admin rights to both folders. Refer to the Google Cloud resource hierarchy for more information about organizations, folders, and projects.
 
 A project that participates in a Shared VPC can be either:
@@ -259,6 +270,243 @@ A project that participates in a Shared VPC can be either:
   * contains one or more Shared VPC networks. A Shared VPC Admin must first enable a project as a host project. After that, a Shared VPC Admin can attach one or more service projects to it.
 * a **_service_** project:
   * is any project that has been attached to a host project by a Shared VPC Admin. This attachment allows it to participate in Shared VPC. It's a common practice to have multiple service projects operated and administered by different departments or teams in your organization.
+
+### Network Segmentation
+VPC Service Controls improves your ability to mitigate the risk of data exfiltration from Google Cloud services such as Cloud Storage and BigQuery. With VPC Service Controls, you create perimeters that protect the resources and data of services that you explicitly specify.
+
+To configure Service Control perimeter:
+1. If you want to use the gcloud command-line tool or the Access Context Manager APIs to create your service perimeters, create an access policy.
+
+_**Note**: You do not have to manually create an access policy if you are using the Cloud Console to manage VPC Service Controls. An access policy will be created for your Organization automatically.
+Secure GCP resources with service perimeters._
+
+2. Set up VPC accessible services to add additional restrictions to how services can be used inside your perimeters (optional).
+3. Set up private connectivity from a VPC network (optional).
+4. Grant access from outside a service perimeter using access levels (optional).
+5. Set up resource sharing between perimeters using service perimeter bridges (optional).
+
+#### Create an access policy
+An access policy collects the service perimeters and access levels you create for your Organization. An Organization can only have one access policy.
+
+When service perimeters are created and managed using the VPC Service Controls page of the Cloud Console, you do not need to create an access policy.
+
+```
+gcloud access-context-manager policies create --organization ORGANIZATION_ID --title POLICY_TITLE
+```
+
+Set the default policy:
+
+```
+gcloud config set access-context-manager/policy POLICY_NAME
+```
+
+You can update the access levels of you organization by using the bulk management apis using gcloud cli:
+
+```
+gcloud access-context-manager levels replace-all \
+  --source-file=FILE \
+  --etag=ETAG \
+  [--policy=POLICY_NAME]
+```
+ `FILE` is a `.yaml` file containing the access levels as shown below:
+
+ ```
+- name: accessPolicies/11271009391/accessLevels/corpnet_access
+  title: Corpnet Access
+  description: Permit access to corpnet.
+  basic:
+    combiningFunction: AND
+    conditions:
+      - ipSubnetworks:
+        - 252.0.2.0/24
+        - 2001:db8::/32
+- name: accessPolicies/11271009391/accessLevels/prodnet_access
+  title: Prodnet Access
+  description: Permit access to prodnet.
+  basic:
+    combiningFunction: OR
+    conditions:
+      - members:
+        - user:exampleuser@example.com
+        - serviceAccount:exampleaccount@example.iam.gserviceaccount.com
+      - ipSubnetworks:
+        - 176.0.2.0/24
+ ```
+
+## Load Balancing and SSL Policies
+A load balancer distributes user traffic across multiple instances of your applications. By spreading the load, load balancing reduces the risk that your applications become overburdened, slow, or nonfunctional.
+
+![LB](images/lb-simple-overview.svg)
+
+Types of LBs:
+* Global LB
+  * Use this when you backen servers are across multi regions / continents
+  * Provides IPV6 termination
+* Regional LB
+  * Use when only One region is needed
+  * Use when only IPV 4 termination is needed
+* External load balancers:
+  * distribute traffic coming from the internet to your Google Cloud Virtual Private Cloud (VPC) network. They are Global load balancing requires that you use the Premium Tier of Network Service Tiers. For regional load balancing, you can use Standard Tier.
+* Internal load balancers distribute traffic to instances inside of Google Cloud network permimeter.
+
+GC Cloud Load balancers is built on the following propretary products:
+
+* [Google Front End(s)](https://cloud.google.com/security/infrastructure/design#google_front_end_service):
+  * which are software-defined, distributed systems that are located in Google points of presence (PoPs) and perform global load balancing in conjunction with other systems and control planes.
+  * smart reverse-proxy
+  * provides public IP hosting of its public DNS name, Denial of Service (DoS) protection, and TLS termination
+* [Andromeda](https://cloudplatform.googleblog.com/2014/04/enter-andromeda-zone-google-cloud-platforms-latest-networking-stack.html)
+  * is Google Cloud's software-defined network virtualization stack.
+* [Maglev](https://research.google/pubs/pub44824/)
+  * which is a distributed system for Network Load Balancing
+* [Envoy proxy](https://www.envoyproxy.io/)
+  * is an open source edge and service proxy, designed for cloud-native applications
+
+* Internal HTTP(s) Load Balancer
+  * built on the Andromeda network virtualization stack and is a managed service based on the open source Envoy proxy. This load balancer provides proxy-based load balancing of Layer 7 application data. You specify how traffic is routed with URL maps. The load balancer uses an internal IP address that acts as the frontend to your backends.
+* External HTTP(s) Load Balancer
+  * is implemented on GFEs. GFEs are distributed globally and operate together using Google's global network and control plane. In Premium Tier, GFEs offer cross-regional load balancing, directing traffic to the closest healthy backend that has capacity and terminating HTTP(S) traffic as close as possible to your users.
+  * Provides DDoS Protection
+* Internal TCP/UDP Load Balancer
+  * is built on the Andromeda network virtualization stack. Internal TCP/UDP Load Balancing enables you to load balance TCP/UDP traffic behind an internal load balancing IP address that is accessible only to your internal virtual machine (VM) instances. By using Internal TCP/UDP Load Balancing, an internal load balancing IP address is configured to act as the frontend to your internal backend instances. You use only internal IP addresses for your load balanced service. Overall, your configuration becomes simpler.
+  * supports regional managed instance groups so that you can autoscale across a region, protecting your service from zonal failures.
+* External TCP/UDP Load Balancer
+  * Built on Maglev. 
+  * enables you to load balance traffic on your systems based on incoming IP protocol data, including address, port, and protocol type. It is a regional, non-proxied load balancing system. Use Network Load Balancing for UDP traffic, and for TCP and SSL traffic on ports that are not supported by the SSL proxy load balancer and TCP proxy load balancer. A network load balancer is a pass-through load balancer that does not proxy connections from clients.
+* SSL Proxy Load Balancer
+  * Implemented on GFEs that are distributed globally. 
+  * If you choose the Premium Tier of Network Service Tiers, an SSL proxy load balancer is global. In Premium Tier, you can deploy backends in multiple regions, and the load balancer automatically directs user traffic to the closest region that has capacity. If you choose the Standard Tier, an SSL proxy load balancer can only direct traffic among backends in a single region.
+  * Provides DDoS protection
+* TCP Proxy Load Balancer
+  * implemented on GFEs that are distributed globally. If you choose the Premium Tier of Network Service Tiers, a TCP proxy load balancer is global. In Premium Tier, you can deploy backends in multiple regions, and the load balancer automatically directs user traffic to the closest region that has capacity. If you choose the Standard Tier, a TCP proxy load balancer can only direct traffic among backends in a single region.
+
+Choosing the right Cloud Load Balancer:
+![Choose LB](images/choose-lb.svg)
+
+#### SSL Policies
+SSL policies give you the ability to control the features of SSL that your Google Cloud SSL proxy load balancer or external HTTP(S) load balancer negotiates with clients. 
+
+By default, HTTP(S) Load Balancing and SSL Proxy Load Balancing use a set of SSL features that provides good security and wide compatibility. Some applications require more control over which SSL versions and ciphers are used for their HTTPS or SSL connections. You can define SSL policies to control the features of SSL that your load balancer negotiates with clients.
+
+The TLS versions currently supported are TLS 1.0, 1.1 and 1.2. SSL 3.0 or ealier is no longer supported by GCP Load Balancers or SSL Proxy.
+
+There are three pre-configured Google Managed profiles which allow you to specify the level of compatibility that is appropriate for your application. A custom profile is also provided that allows you to select the SSL features you want manually.
+
+Google Managed Profiles:
+* **COMPATIBLE**:
+  * allows the broadset of clients, including those which support only out-of-date SSL features, to negotiate SSL with the LB.
+* **MODERN**:
+  * Supports a wide set of SSL features, allowing modern clients to negotiate SSL.
+* **RESTRICTED**: 
+  * Supports a reduced set of SSL features, intended to meet stricter compliance requirements.
+
+The following table shows all the current features available that are supported for each pre-configured profiles.
+
+![SSL Policy Features](images/SSL-Policy-Features-Pre-Configured.png)
+
+**NOTE: If no SSL Policy is specified, the default SSL Policy is used which is equivalent to the _COMPATIBLE_ profile.**
+
+Enabling an SSL Policy using `glcoud` command line tool:
+
+```
+gcloud compute ssl-policies create NAME \
+    --profile COMPATIBLE|MODERN|RESTRICTED|CUSTOM \
+    --global \
+    [--min-tls-version 1.0|1.1|1.2] \
+    [--custom-features FEATURES]
+```
+
+Using pre-defined (MODERN):
+```
+gcloud compute ssl-policies create my_ssl_policy \
+    --global \
+    --profile MODERN    \
+    --min-tls-version 1.0
+```
+
+Using custom profile:
+```
+gcloud compute ssl-policies create NAME \
+    --global \
+    --profile CUSTOM --min-tls-version 1.2 \
+    --custom-features "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,"\
+    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+```
+
+You can also create a target SSL Proxy or HTTPS proxy with an SSL Policy:
+
+```
+gcloud compute target-ssl-proxies | target-https-porxy create NAME \
+    --backend-service BACKEND_SERVICE_NAME \
+    --ssl-certificate SSL_CERTIFICATE_NAME \
+    [--ssl-policy SSL_POLICY_NAME]
+```
+
+## Network Isolation
+If you want complete isolation between various applications, customers, etc., you could create multiple networks.
+
+![multiple vpc](images/multiple-networks-1024x646.png)
+
+You can have up to five networks per project, including the default network. Multiple networks within a single project can provide multi-tenancy, IP overlap, or isolation within the project itself. Just another option instead of having multiple projects.
+
+## IPSec VPN and Cloud Interconnect
+### Cloud VPN
+Cloud VPN securely connects your peer network to your Virtual Private Cloud (VPC) network through an [IPsec](https://wikipedia.org/wiki/IPsec) [VPN](https://wikipedia.org/wiki/Virtual_private_network) connection.
+
+Traffic traveling between the two networks is encrypted by one VPN gateway, and then decrypted by the other VPN gateway. This protects your data as it travels over the internet. You can also connect two instances of Cloud VPN to each other.
+
+![IPSec VPN](images/IPSec%20VPN.png)
+
+Offers an SLA of 99.9% service availability. Supports Static Routes or Dynamic Routes (with the use of a Cloud Router). Suppports IKEv1 and IKEv2 (Internet Key Exchange) using a shared secret (IKE preshared key).
+
+Cloud VPN traffic with either traverse the public internet of can use a direct peering line to Google's Network (Cloud Interconnect).
+
+Each _Cloud VPN_ can support up to 3 Gbs when traffic is traversing a direct pering link, or 1.5 Gps when its traversing over the public internet.
+
+**VPN with Static Routes**
+![VPN Static Routes](images/VPN_Static_Routes.png)
+
+**VPN with Dynamic Routes using Cloud Router**
+![VPN Dynamic Routes](images/VPN_Dynamic_Routes.png)
+
+New subnets in GCP or in the Peer network are discovered and shared, enabling connectivity between the two peers for both entire networks.
+
+Two types of configuration
+* VPN Gateway:
+  * A virtual VPN gateway running in Google Cloud managed by Google, using a configuration that you specify in your project, and used only by you. Each Cloud VPN gateway is a regional resource that uses one or more regional external IP addresses. A Cloud VPN gateway can connect to a peer VPN gateway.
+* HA (High Availability) or Classic VPN
+  * HA:
+    * Supports only BGP (Border Gateway Protocol) Routing
+    * External IPs created from a pool. No forwarding rules required.
+    * Provides a 99.99% SLA when configured with two interfaces and two external IPs
+* Classic:
+  * External IPs and forwarding rules must be created
+  * Static Routing (policy based, route based) or Dynamic Routing using BGP
+  * Provides a 99.99% SLA 
+
+### Cloud Interconnect
+Network Connectivity provides two options for extending your on-premises network to your VPC networks in Google Cloud. You can create a dedicated connection (Dedicated Interconnect) or use a service provider (Partner Interconnect) to connect to VPC networks. When choosing an interconnect type, consider your connection requirements, such as the connection location and capacity. 
+
+Cloud Interconnect provides low latency, high availability connections that enable you to reliably transfer data between you on-premise network and GCP VPC Networks.
+
+Types:
+* Dedicated Interconnect:
+  * A direct connection to Google.
+  * Traffic flows directly between networks, not through the public internet.
+  * Availble in 10 Gbps or 100 Gbps circuits with flexible interconnect attachment (VLAN) capacities from 50 Mbps to 50 Gbps.
+  * BGP must be configured on your on-prem routers as well as Cloud Routers
+  * Google Provides end-to-end SLA
+* Partner Interconnect:
+  * More points of connectivity through one of our supported service providers.
+  * Traffic flows between networks through a service provider, not through the public internet.
+  * Flexible capacities from 50 Mbps to 50 Gbps.
+  * For layer 2 connections, BGP must be configured on your on-prem routers and Cloud Routers
+  * For Layer 3 connections, the configurations of Cloud Routers and their peers is fully automated.
+  * Google provides and SLA between Google Network and the Service Provider. E2E SLA depends on the Service Provider.
+
+Choosing the right connection:
+![Choose Cloud Interconnect](images/choose-interconnect.png)
+  
 
 ## Cloud NAT
 Cloud NAT (network address translation) allows Google Cloud virtual machine (VM) instances without external IP addresses and private Google Kubernetes Engine (GKE) clusters to send outbound packets to the internet and receive any corresponding established inbound response packets.

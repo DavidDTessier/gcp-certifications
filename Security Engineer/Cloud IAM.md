@@ -137,6 +137,16 @@ Service accounts differ from user accounts in a few key ways:
 
 GCP provides the [IAM Recommender](https://cloud.google.com/iam/docs/recommender-overview) tool for providing insights and recommendations on enforcing least priviledge on you IAM accounts.
 
+Once you decide that you need a service account, you can ask yourself the following questions to understand how you're going to use the service account:
+
+* What resources can the service account access?
+* What permissions does the service account need?
+* Where will the code that assumes the identity of the service account be running: on Google Cloud Platform or on-premises?
+
+Use the following diagram to help answer the above questions:
+
+![sa flow](images/sa-flowchart.png)
+
 **Best Practices**
 Best practice for managing service accounts can be found [here](https://cloud.google.com/blog/products/gcp/help-keep-your-google-cloud-service-account-keys-safe) and [here](https://cloud.google.com/iam/docs/understanding-service-accounts#best_practices) also.
 
@@ -246,6 +256,16 @@ After 30 days, IAM permanently removes the service account. Google Cloud cannot 
 
 If you are not able to undelete the service account, you can create a new service account with the same name; revoke all of the roles from the deleted service account; and grant the same roles to the new service account. For details, see Policies with deleted members.
 
+Key IAM Permissions for Services Accounts:
+
+* `iam.serviceAccounts.actAs`:
+  * attach it so resources that will authenticate as the service account
+  * process that perform long running jobs
+* `iam.serviceAccounts.getAccessToken` and
+`iam.serviceAccounts.signBlob` and
+`iam.serviceAccounts.signJwt` and
+`iam.serviceAccounts.implicitDelegation` and also the role `roles/iam.serviceAccountTokenCreator`
+  * a user (or service) can directly impersonate (or assert) the identity of a service account in a few common scenarios
 
 ### Managing Authentication
 
@@ -273,16 +293,10 @@ You can select different levels of 2SV enforcement:
 
 ### Managing Authorization and Access Control
 
-
-
-
-
 Best practices for IAM Security can be found [here](https://cloud.google.com/iam/docs/using-iam-securely)
 
-
-
-
-
+* Use groups when configuring GCP access
+* Assign roles to the groups instead of individual users
 
 #### Managing IAM permissions with primitive, predefined, and custom roles
 
