@@ -101,6 +101,8 @@ To delete a VPC use the following command:
 gcloud compute networks delete NETWORK_NAME
 ```
 
+[Multi VPC Lab](https://www.qwiklabs.com/focuses/1230?parent=catalog)
+
 ### Firewalls
 Virtual Private Cloud (VPC) firewall rules apply to a given project and network. You can create a [Firewall Policy](https://cloud.google.com/vpc/docs/firewall-policies) that can be applied accross the orgranization.
 
@@ -209,6 +211,8 @@ A service account represents an identity associated with an instance. Only one s
 
 You cannot mix filtering by service account or network tags.
 
+[Configure VPC Firewall Lab](https://docs.google.com/document/d/1RWck9O9sJt6SqI1l8o9-aih2UPwLmp6dQQFbvoWmNwM/edit#heading=h.2g4x5d8r4egh)
+
 ## VPC Peering
 Google Cloud VPC Network Peering allows internal IP address connectivity across two Virtual Private Cloud (VPC) networks regardless of whether they belong to the same project or the same organization.
 
@@ -237,6 +241,8 @@ At the time of peering, Google Cloud checks to see if there are any subnets with
 ![network peering](images/network-peering-11.svg)
 
 For more details on VPC Peering go [here](https://cloud.google.com/vpc/docs/vpc-peering)
+
+[VPC Peering Lab](https://www.qwiklabs.com/focuses/964?parent=catalog)
 
 ## Shared VPC
 Shared VPC allows an organization to connect resources from multiple projects to a common Virtual Private Cloud (VPC) network, so that they can communicate with each other securely and efficiently using internal IPs from that network. When you use Shared VPC, you designate a project as a host project and attach one or more other service projects to it. The VPC networks in the host project are called Shared VPC networks. [Eligible resources](https://cloud.google.com/vpc/docs/shared-vpc#resources_that_can_be_attached_to_shared_vpc_networks_from_a_service_project) from service projects can use subnets in the Shared VPC network.
@@ -382,6 +388,9 @@ GC Cloud Load balancers is built on the following propretary products:
 
 Choosing the right Cloud Load Balancer:
 ![Choose LB](images/choose-lb.svg)
+
+[HTTP Load Balancer Lab](https://google.qwiklabs.com/focuses/12007?parent=catalog)
+[Internal Load Balancer Lab](https://google.qwiklabs.com/focuses/1250?catalog_rank=%7B%22rank%22%3A1%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6735196)
 
 #### SSL Policies
 SSL policies give you the ability to control the features of SSL that your Google Cloud SSL proxy load balancer or external HTTP(S) load balancer negotiates with clients. 
@@ -574,3 +583,52 @@ gcloud dns managed-zones create EXAMPLE_ZONE \
 
 ### Verifying DNSSEC deployment
 You can use [DNSViz](http://dnsviz.net/),the [Verisign DNSSEC debugger](http://dnssec-debugger.verisignlabs.com/), or [Zonemaster](https://zonemaster.net/) to verify correct deployment of your DNSSEC-enabled zone (the latter two can also be used before you update your registrar with your Cloud DNS name servers or DS record to activate DNSSEC). An example of a domain that is properly configured for DNSSEC is example.com; you can see it with DNSViz at http://dnsviz.net/d/www.example.com/dnssec/.
+
+## Private Google API Access
+Private Google API Access enables Compute Engine instances on a VPC subnet to reach
+Google APIs and services using an internal IP address rather than an external IP address. Previously, you had to provide a public path for your internal Compute Engine instances (for example, an external IP address or a NAT gateway) to allow the instances to access Google APIs.
+
+With Private Google Access, an API call is resolved to a public IP address, but the traffic is all internal and private. Network address translation is in Google's infrastructure and is transparent
+to the user.
+
+If Private Google Access is not enabled, an organization requires an external IP address to communicate with Google APIs. Although the communication is encrypted, this IP address can increase an organization’s risk by unnecessarily exposing its network to the internet. 
+When Private Google Access is enabled, VM instances in a subnet can reach the above APIs and services without needing an external IP address. Instead, VMs can use their internal IP addresses to access Google managed services.
+
+Instances with external IP addresses are not affected when you enable the ability to access Google services from internal IP addresses. These instances can still connect to Google APIs and managed services.
+
+The Cloud and Developer APIs and services that can be reached include, but are not limited to, the following:
+* BigQuery
+* Cloud Bigtable
+* Container Registry
+* Cloud Dataproc
+* Cloud Datastore
+* Cloud Pub/Sub
+* Cloud Spanner
+* Cloud Storage
+
+Private Google Access does not apply to Cloud SQL. You do not get private connectivity to Cloud SQL when you use Private Google Access.
+
+Private Goolge API access is enabled on VPC subnets but is disabled by default. You add this feature to your projects when you create a subnetwork or by modifying an existing subnetwork.
+
+You must also ensure that any Compute Engine instance that accesses a Google API has a matching `default-internet-gateway` route set in its GCP-based network. All GCP networks have a `default-internet-gateway` route, unless the route has been manually deleted.
+
+[Private Google Access and Cloud NAT Lab](https://www.qwiklabs.com/focuses/4362?parent=catalog)
+
+## VPC Flow Logs
+VPC Flow Logs records network flows sent from or received by VM instances.
+VPC flow logs will only include traffic seen by a VM (e.g., if traffic was blocked by an egress rule, it will be seen but traffic blocked by an ingress rule, not reaching a VM, will not be seen.
+The traffic will include:
+* Network flows between VMs in the same VPC
+* Network flows between VMs in a VPC network and hosts in your on-premises network that are connected via VPN or Cloud Interconnect
+* Network flows between VMs and end locations on the Internet
+* Network flows between VMs and Google services in production Protocols: you can monitor network flows for TCP and UDP.
+
+These logs can be used to monitor network traffic to and from your VMs, forensics, real-time security analysis, and expense optimization.
+
+You can view flow logs in Stackdriver Logging, and you can export logs to any destination that Stackdriver Logging export supports (Cloud Pub/Sub, BigQuery, etc.).
+
+Flow logs are aggregated by connection, at a 5 second interval, from Compute engine instances and exported in real time. By subcribing to Cloud Pub/Sub, you can analyze flow logs using real-time streaming.
+
+VPC Flow Logs service is disabled by default on all VPC subnets. When enabled it applies to all VM instances in the subnet.
+
+[VPC Flow Log Lab](https://www.qwiklabs.com/focuses/1236?parent=catalog)
