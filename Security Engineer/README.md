@@ -27,8 +27,15 @@ The follow section we will breakdown the exam guide into areas of study.
 
 Section:
 
-1. [Cloud Identity & IAM](Cloud%20Identity%20and%20IAM.md)
-2. [Network Security](Network%20Security.md)
+1. [Resource Manager](Resource%20Manager.md)
+2. [Cloud Identity & IAM](Cloud%20Identity%20and%20IAM.md)
+3. [Network Security](Network%20Security.md)
+4. [Encryption on Google Cloug Platform](Encryption%20on%20GCP.md)
+5. [Data Protection](Data%20Protection.md)
+6. [Compute and Storage Security](Compute%20and%20Storage%20Security.md)
+7. [Managing Operations in a Cloud Environment](Managing%20Operations%20in%20GCP.md)
+8. [Cloud Monitoring](Cloud%20Monitoring.md)
+9. [Compliance](Compliance.md)
 
 
 
