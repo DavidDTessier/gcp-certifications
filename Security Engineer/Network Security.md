@@ -291,6 +291,8 @@ Secure GCP resources with service perimeters._
 4. Grant access from outside a service perimeter using access levels (optional).
 5. Set up resource sharing between perimeters using service perimeter bridges (optional).
 
+[Creating a service perimeter](https://cloud.google.com/vpc-service-controls/docs/create-service-perimeters)
+
 #### Create an access policy
 An access policy collects the service perimeters and access levels you create for your Organization. An Organization can only have one access policy.
 
