@@ -240,6 +240,38 @@ At the time of peering, Google Cloud checks to see if there are any subnets with
 
 ![network peering](images/network-peering-11.svg)
 
+## VPC Flow Logs
+VPC Flow Logs records network flows sent from or received by VM instances.
+VPC flow logs will only include traffic seen by a VM (e.g., if traffic was blocked by an egress rule, it will be seen but traffic blocked by an ingress rule, not reaching a VM, will not be seen.
+The traffic will include:
+* Network flows between VMs in the same VPC
+* Network flows between VMs in a VPC network and hosts in your on-premises network that are connected via VPN or Cloud Interconnect
+* Network flows between VMs and end locations on the Internet
+* Network flows between VMs and Google services in production Protocols: you can monitor network flows for TCP and UDP.
+
+These logs can be used to monitor network traffic to and from your VMs, forensics, real-time security analysis, and expense optimization.
+
+You can view flow logs in Stackdriver Logging, and you can export logs to any destination that Stackdriver Logging export supports (Cloud Pub/Sub, BigQuery, etc.).
+
+Flow logs are aggregated by connection, at a 5 second interval, from Compute engine instances and exported in real time. By subcribing to Cloud Pub/Sub, you can analyze flow logs using real-time streaming.
+
+VPC Flow Logs service is disabled by default on all VPC subnets. When enabled it applies to all VM instances in the subnet.
+
+Enabling VPC Flow Logs can be done via Console (at any time) using the CLI.
+
+```
+gcloud compute networks subnets create|update subnet-name \
+    --enable-flow-logs \
+    [--logging-aggregation-interval=aggregation-interval \
+    [--logging-flow-sampling=0.0...1.0] \
+    [--logging-filter-expr=expression] \
+    [--logging-metadata=(include-all | exclude-all | custom)] \
+    [--logging-metadata-fields=fields] \
+    [other flags as needed]
+```
+
+[VPC Flow Log Lab](https://www.qwiklabs.com/focuses/1236?parent=catalog)
+
 For more details on VPC Peering go [here](https://cloud.google.com/vpc/docs/vpc-peering)
 
 [VPC Peering Lab](https://www.qwiklabs.com/focuses/964?parent=catalog)
@@ -291,7 +323,7 @@ Secure GCP resources with service perimeters._
 4. Grant access from outside a service perimeter using access levels (optional).
 5. Set up resource sharing between perimeters using service perimeter bridges (optional).
 
-[Creating a service perimeter](https://cloud.google.com/vpc-service-controls/docs/create-service-perimeters)
+[Creating a service perimeter]()
 
 #### Create an access policy
 An access policy collects the service perimeters and access levels you create for your Organization. An Organization can only have one access policy.

@@ -1,6 +1,12 @@
 # Encryption on GCP
 ## Overview
-Google Cloud Platform encrypts customer data stored at rest by default, with no additional action required from you. ... Data in Google Cloud Platform is broken into subfile chunks for storage, and each chunk is encrypted at the storage level with an individual encryption key. Google uses a common encryption library, [Keyczar](https://github.com/google/keyczar), to implement encryption across almost all GCP Platform products.
+Google Cloud Platform encrypts customer data stored at rest by default, with no additional action required from you. Data in Google Cloud Platform is broken into subfile chunks for storage, and each chunk is encrypted at the storage level with an individual encryption key. Google uses a common encryption library, [Keyczar](https://github.com/google/keyczar), to implement encryption across almost all GCP Platform products.
+
+## Envelope Encryption
+By default, at the storage layer, Google uses _Envelope Encryption_, with its internal kms service as a central keystore.
+
+![Envelope Encryption](images/envelope_encryption_store.svg)
+
 
 ## Encryption at Rest
 By default GCP encrypts all customers data stored at rest using the Advanced Encryption Standard (AES) algorithm using a unique data encryption key (DEK).
