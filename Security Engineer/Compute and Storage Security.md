@@ -1,4 +1,117 @@
 # Compute Engine Security Best Practices
+## Service Accounts and IAMs
+A default compute engine service account is created for every GCP project when Compute Engine API is enabled. The default SA has `Project Editor` role which can be dangerous as it has access to create and delete resources.
+
+The default SA can be assigned to an instance created or you can specifiy another custom sa, which would require the correct permissions.
+
+When an instance is assigned a service account, the VM authenticates using the identity of the service account when making calls to Google APIs.
+
+Specifying _scopes_ can limit what the default service account can and cannot do.
+
+Scopes:
+* Allow default access:
+  * Read-only access to storage
+  * Access to Stackdriver Logging and Monitoring
+* Allow full access:
+  * can grant access to all Cloud APIs
+  * Not best practice
+* Set access for each API:
+  * Choose requirements for you application
+  * Can grant individual access to specific CLoud Apis
+
+Using the default account, the instance(s) must be stopped in order to change the scopes associated. If using a custom/user-managed service account, IAM roles can be changed without needing to stop instances.
+
+```
+gcloud compute instances set-scopes [INSTANCE_NAME] --scopes [SCOPES]
+```
+`--scopes compute-rw,storage-ro,etc`
+
+## Secure Connection
+Can added project wide ssh keys or instance level ssh keys.
+
+Use OS Login to simplify SSH access management by linking your Linux user account to your Google identity.
+
+Use firewalls to restrict traffic.
+Use HTTPS and SSL for production Web Servers.
+Configure Port Forwarding over SSH.
+```
+gcloud compute ssh example-instance \
+    --project my-project \
+    --zone us-central1-a \
+    -- -L 2222:localhost:8888 -L 2299:localhost:8000
+```
+
+Connecting via Bastion Host to instances without external IPs:
+
+![Bastion Host](images/bastion.png)
+
+Use Identity Aware Proxy for TCP Forwarding.
+
+To configure IAP setup firewalls like such:
+
+```
+gcloud compute firewall-rules create allow-rdp-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:3389 \
+  --source-ranges=35.235.240.0/20
+```
+```
+gcloud compute firewall-rules create allow-ssh-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:22 \
+  --source-ranges=35.235.240.0/20
+```
+```
+gcloud compute firewall-rules create allow-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:PORT \
+  --source-ranges=35.235.240.0/20
+```
+
+Also grant permissions to use IAP:
+
+```
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+    --member=user:[EMAIL ]\
+    --role=roles/iap.tunnelResourceAccessor
+```
+
+Once IAP is configure you can use tunnel over ssh:
+
+`gcloud compute ssh [INSTANCE_NAME]`
+
+Or use the follow for IAP TCP tunnelling other ports:
+
+```
+gcloud compute start-iap-tunnel [INSTANCE_NAME] [INSTANCE_PORT] `
+    --local-host-port=localhost:LOCAL_PORT `
+    --zone=ZONE
+```
+
+If the instance(s) have no public IP configure a bastion host vm in order to connect to any private VM. The bastion host should be hardend and have necessary firewall rules to limit the source IPs that can connect to it.
+
+![Bastion](images/bastion.png)
+
+
+## Secure Images
+Define an Organization Policy that only allow compute engine VMs to be created from approved images and use only Trust images.
+
+```
+constraint: constraints/compute.trustedImageProjects
+listPolicy:
+  allowedValues:
+    - projects/debian-cloud
+    - projects/cos-cloud
+  deniedValues:
+    - projects/unwanted-images
+```
+Use Hardened custom OS images to help reduce the surface of vulnerability for the instance.
+
+Subscribe to [gce-image-notifications](https://groups.google.com/forum/#!aboutgroup/gce-image-notifications) to recieve notifications about Compute Engine image update releases.
+
 
 # Google Kubernetes Engine (GKE)
 Google Kubernetes Engine (GKE) provides a managed environment for deploying, managing, and scaling your containerized applications using Google infrastructure. The GKE environment consists of multiple machines (specifically, Compute Engine instances) grouped together to form a cluster.

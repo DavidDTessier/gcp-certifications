@@ -13,9 +13,24 @@ By default GCP encrypts all customers data stored at rest using the Advanced Enc
 
 DEKs are encrypted with ("wrapped" by) key encryption keys (KEKs) and stored with the data.
 
+![DEKs](images/deks.png)
+
 By default, KEKs are stored using Cloud KMS and are fully managed by Google. Decrypting the data requires the unwrapped data encryption key (DEK) for the data chunk.
 
+![KEKs](images/keks.png)
+
 All data stored at the storage level is encrypted with AES256 by default.
+
+Decrypting data requires the unwrapped data encryption key
+(DEK) for the data chunk.
+
+![Decryption](images/decrypting.png)
+
+KEK rotation varies by service, the standard rotation period is 90 days.
+
+RE-encryption of data is required at least once every 5 years. Best practice is more frequent re-encryption.
+
+Google persists/stores up to 20 verisons of encrypted data.
 
 ### Layers of Encryption
 Google uses several layers of encryption to protect customers data. 

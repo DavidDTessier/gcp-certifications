@@ -295,8 +295,6 @@ You can select different levels of 2SV enforcement:
 
 Best practices for IAM Security can be found [here](https://cloud.google.com/iam/docs/using-iam-securely)
 
-* Use groups when configuring GCP access
-* Assign roles to the groups instead of individual users
 
 #### Managing IAM permissions with primitive, predefined, and custom roles
 
@@ -343,5 +341,14 @@ In most cases IAMs are the recommended approach for giving access to resources.
   * Granting roles at the bucket level does not affect any existing roles that you granted at the project level, and vice versa. For example, say you want to give a user permission to read objects in any bucket but create objects only in one specific bucket. To achieve this, give the user the Storage Object Viewer role at the project level, thus allowing the user to read any object stored in any bucket in your project, and give the user the Storage Object Creator role at the bucket level for a specific bucket, thus allowing the user to create objects only in that bucket. Some roles can be used at both the project level and the bucket level. When used at the project level, the permissions they contain apply to all buckets and objects in the project. When used at the bucket level, the permissions only apply to a specific bucket and the objects within it. Examples of such roles are Storage Admin, Storage Object Viewer, and Storage Object Creator. Some roles can only be applied at one level. For example, you can only apply the Viewer role at the project level, while you can only apply the Storage Legacy Object Owner role at the bucket level.
   * All other bucket-level Cloud IAM roles, and all project-level Cloud IAM roles, work independently from ACLs. For example, if you give a user the Storage Object Viewer role, the ACLs remain unchanged. 
 
+## Cloud IAM Best Practices
 
+* Use groups when configuring GCP access
+* Assign roles to the groups instead of individual users
+* Utilizing predifined roles offers less admin overhead
+* Prededinfed roles are managed by Google
+* Custom roles are **NOT** managed by Google
+* Audit logs record project-level permission changes
+* Audit policy changes
+* Export audit logs to Cloud Storage to store logs for longer periods of time
 
