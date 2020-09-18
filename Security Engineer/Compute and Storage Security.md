@@ -1,4 +1,21 @@
 # Compute Engine Security Best Practices
+
+## Patch Managment
+Use OS patch management to apply operating system patches across a set of Compute Engine VM instances (VMs).Long running VMs require periodic system updates to protect against defects and vulnerabilities.
+
+The OS patch management service has two main components:
+
+* Patch compliance reporting:
+  *  which provides insights on the patch status of your VM instances across Windows and Linux distributions. Along with the insights, you can also view recommendations for your VM instances.
+* Patch deployment: 
+  * which automates the operating system and software patch update process. A patch deployment schedules patch jobs. A patch job runs across VM instances and applies patches.
+
+**Benefits**
+* Create patch approvals. You can select what patches to apply to your system from the full set of updates available for the specific operating system.
+* Set up flexible scheduling. You can choose when to run patch updates (one-time and recurring schedules).
+* Apply advanced patch configuration settings. You can customize your patches by adding configurations such as pre and post patching scripts.
+* Manage these patch jobs or updates from a centralized location. You can use the the OS patch management dashboard for monitoring and reporting of patch jobs and compliance status.
+
 ## Service Accounts and IAMs
 A default compute engine service account is created for every GCP project when Compute Engine API is enabled. The default SA has `Project Editor` role which can be dangerous as it has access to create and delete resources.
 
@@ -112,6 +129,15 @@ Use Hardened custom OS images to help reduce the surface of vulnerability for th
 
 Subscribe to [gce-image-notifications](https://groups.google.com/forum/#!aboutgroup/gce-image-notifications) to recieve notifications about Compute Engine image update releases.
 
+Compute Engine predefines the following curated IAM roles that you can use for image management:
+
+* `roles/compute.imageUser`: 
+  * Permission to list, read, and use images in your requests, without having other permissions on the image.
+* `roles/compute.storageAdmin`: 
+  * Permissions to create, modify, and delete disks, images, and snapshots.
+
+As a best practice, Google recommends keeping all your custom images in a single project dedicated to hosting these images and nothing else.
+
 
 # Google Kubernetes Engine (GKE)
 Google Kubernetes Engine (GKE) provides a managed environment for deploying, managing, and scaling your containerized applications using Google infrastructure. The GKE environment consists of multiple machines (specifically, Compute Engine instances) grouped together to form a cluster.
@@ -197,6 +223,90 @@ gcloud compute sole-tenancy node-groups create group-name --zone compute-zone \
 ```
 Replace _group-name_ with the _sole-tenant group_ created.
 
+**Deploying Services to specific node pools**
+When you define a [Service](https://kubernetes.io/docs/concepts/services-networking/service/), you can indirectly control which node pool it is deployed into. The node pool is not dependent on the configuration of the Service, but on the configuration of the Pod.
+
+* You can explicitly deploy a Pod to a specific node pool by setting a [nodeSelector](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/) in the Pod manifest. This forces a Pod to run only on nodes in that node pool.
+
+* You can specify resource requests for the containers. The Pod only runs on nodes that satisfy the resource requests. For instance, if the Pod definition includes a container that requires four CPUs, the Service does not select Pods running on Nodes with two CPUs.
+
+Example for deploying a Pod to a specific node pool:
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    env: test
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    imagePullPolicy: IfNotPresent
+  nodeSelector:
+    cloud.google.com/gke-nodepool: [nodepool-name]
+```
+
+**Node Taints**
+When you schedule workloads to be deployed on your cluster, node taints help you control which nodes they are allowed to run on.
+
+A _node taint_ lets you mark a node so that the scheduler avoids or prevents using it for certain Pods. A complementary feature, tolerations, lets you designate Pods that can be used on "tainted" nodes.
+
+Node taints are key-value pairs associated with an effect. Here are the available effects:
+
+* `NoSchedule`: 
+  * Pods that do not tolerate this taint are not scheduled on the node; existing Pods are not evicted from the node.
+* `PreferNoSchedule`: 
+  * Kubernetes avoids scheduling Pods that do not tolerate this taint onto the node.
+* `NoExecute`: 
+  * Pod is evicted from the node if it is already running on the node, and is not scheduled onto the node if it is not yet running on the node
+
+You can assign tainst to both the cluster and the node-pool
+
+Command assigning taints to the cluster at creation time:
+```
+gcloud container clusters create [cluster-name]\
+  --node-taints [key]=[value:effect]
+```
+ex:
+```
+gcloud container clusters create example-cluster \
+  --node-taints dedicated=experimental:PreferNoSchedule
+```
+
+Command assigning taints at node-pool creation:
+```
+gcloud container node-pools create [pool-name] \
+  --cluster [cluster-name] \
+  --node-taints [key]=[value:effect]
+```
+
+Ex:
+```
+gcloud container node-pools create example-pool --cluster example-cluster \
+  --node-taints dedicated=experimental:NoSchedule
+```
+```
+gcloud container node-pools create example-pool-2 --cluster example-cluster \
+  --node-taints special=gpu:NoExecute
+```
+
+You can configure Pods to tolerate a taint by including the `tolerations` field in the Pods's spec.
+
+```
+tolerations:
+- key: dedicated
+  operator: Equal
+  value: experimental
+  effect: NoSchedule
+```
+
+You can also add taints to exists nodes by leveraging `kubectl`:
+
+```
+kubectl taint nodes [node-name] [key]=[value:effect]
+```
 ## Private clusters
 Private clusters give you the ability to isolate nodes from having inbound and outbound connectivity to the public internet. This isolation is achieved as the nodes have internal IP addresses only. If you need or want to provide outbound internet access for private nodes you can leverage Cloud NAT or managed your own NAT Gateway.
 
@@ -772,6 +882,8 @@ A full list of predefined IAM roles can be found [here](https://cloud.google.com
 The user who created the dataset is the owner.
 
 Always best to assigned roles to groups.
+
+BigQuery only supports _Customer-Managed Encryption Keys_(CMEK) for user controlled encryption.
 
 ### Authorized Views
 Views to provide row or column level permissions to datasets.

@@ -29,6 +29,7 @@ IAM lets you set policies at the following levels of the resource hierarchy:
 
 * Organization level. 
   * The organization resource represents your company. IAM roles granted at this level are inherited by all resources under the organization. For more information, see Access control for organizations using IAM.
+    * Users who are not owners, including organization administrators, must be assigned either the `Organization Role Administrator role (roles/iam.organizationRoleAdmin)` or the IAM `Role Administrator role (roles/iam.roleAdmin)`. The IAM `Security Reviewer role (roles/iam.securityReviewer)` enables the ability to view custom roles but not administer them.
 
 * Folder level. 
   * Folders can contain projects, other folders, or a combination of both. Roles granted at the highest folder level will be inherited by projects or other folders that are contained in that parent folder. For more information, see Access control for folders using IAM.
@@ -266,6 +267,14 @@ Key IAM Permissions for Services Accounts:
 `iam.serviceAccounts.signJwt` and
 `iam.serviceAccounts.implicitDelegation` and also the role `roles/iam.serviceAccountTokenCreator`
   * a user (or service) can directly impersonate (or assert) the identity of a service account in a few common scenarios
+
+### Perform G Suite Domain-Wide Delegation of Authority
+In enterprise applications you may want to programmatically access a user's data without any manual authorization on their part. In G Suite domains, the domain administrator can grant third-party applications with domain-wide access to its users' data — this is known as domain-wide delegation of authority. To delegate authority this way, domain administrators can use service accounts with OAuth 2.0.
+
+To access user data on a G Suite domain, the service account that you created needs to be granted access by a super administrator for the domain.
+
+OAuth Scopes:
+For example, if you require domain-wide access to Users and Groups enter: https://www.googleapis.com/auth/admin.directory.user, https://www.googleapis.com/auth/admin.directory.group
 
 ### Managing Authentication
 

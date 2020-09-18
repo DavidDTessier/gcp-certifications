@@ -35,5 +35,25 @@ There are four phases of the migration path.
 ![Migration Drivers](images/migration%20drivers.png)
 
 # Disaster Recovery
+Define  the following :
+
+* _Recovery Time Objective_ (RTO)
+  * max length of time you app can be offline
+* _Recovery Point Objective_ (RPO)
+  * max acceptable length of time during which data may be lost
+
+The small the RTO and RPO values are the more complex you DR strategy becomes. For smaller RTO and RPO values you can achieve these only by configuring an HA pattern across your production enviroment. In the hybrid world, you would be DRing into GCP.
+
+DR environment should mimic your production environment with similar infrastructure and security controls. 
+
+Use of Infrastructure-As-Code is key for being able to replicate easily and quickly. 
+
+Regularly test your DR plan:
+* Automate infrastructure provisioning
+* Monitor and debug tests with Cloud Logging and Cloud Monitoring
+* Perform pen testing as if its production
+
 
 # Backup and Recovery
+
+Use Cloud Storage to store backups and plan daily routine backups.

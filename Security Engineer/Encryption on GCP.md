@@ -158,6 +158,14 @@ For the user managing Cloud KMS, that is, a member of an organization's IT secur
 * `serviceusage.services.get`
 * `resourcemanager.projects.get`
 
+You can grant or restrict the ability to perform specific cryptographic operations, such as rotating a key or encrypting data. You can grant IAM roles on:
+
+* A key directly
+* A key ring, inherited by all keys in that key ring
+*A Google Cloud project, inherited by all keys in the project
+* A Google Cloud folder, inherited by all keys in all projects in the folder
+* A Google Cloud organization, inherited by all keys in folders in the organization
+
 # Labs
 [Getting Started With Cloud KMS](https://www.qwiklabs.com/focuses/1713?catalog_rank=%7B%22rank%22%3A1%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6747257)
 

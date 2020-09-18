@@ -83,6 +83,20 @@ When logs are exported to BigQuery, dated tables are created to hold log entries
      *  Logstash
         *  Use [Pub/Sub input plugin](https://github.com/logstash-plugins/logstash-input-google_pubsub) and [Cloud Storage input plugin](https://github.com/josephlewis42/logstash-input-google_cloud_storage) to integrate with Logstash.
 
+### Create Logging Sinks - Command Line Samples
+
+```
+gcloud logging sinks create  NEW_SINK_NAME  DESTINATION  --log-filter="..." ...
+```
+The above command is the general gcloud command to create a sink for exporting logs. 
+
+You can leverage one of the following additional flags `--folder`,`--billing-account`, and `--organization` to export logs from those resources. NOTE that by default, using these flags restricts the sink to exporting only the logs held in the named folder, organization, or billing account.
+
+If you additionally add the `--include-children` flag, then the sink becomes an `aggregated` sink and the sink exports logs from all folders and projects contained within the named resource, subject to the filter in the `--log-filter` flag.
+
+Also note that Billing accounts don't contain folders or projects, so `--include-children` has no effect with `--billing-account`.
+
+
 ## Cloud Monitoring and Alerting
 Cloud Monitoring uses _Workspaces_ to organize monitoring information contained in one or more GCP projects or AWS Accounts.
 

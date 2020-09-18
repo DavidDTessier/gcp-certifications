@@ -144,7 +144,7 @@ Use the parameters as follows. More details about each are available in the SDK 
 * `--network`:
   * The network where the rule will be created. If omitted, the rule will be created in the default network. If you don't have a default network or want to create the rule in a specific network, you must use this field.
 * `--priority`:
-  * A numerical value that indicates the priority for the rule. The lower the number, the higher the priority.
+  * A numerical value that indicates the priority for the rule. The lower the number, the higher the priority. A rule with a priority of 1 is evaluated first. Priorities must be unique for each rule. A good practice is to give rules priority numbers that allow later insertion (such as 100, 200, 300).
 * `--direction`: 
   * The direction of traffic, either ingress or egress.
 * `--action`: 
@@ -295,7 +295,11 @@ When defining each Service Project Admin, a Shared VPC Admin can grant permissio
 **Network and Security Admins**
 Shared VPC Admins have full control over the resources in the host project, including administration of the Shared VPC network. They can optionally delegate certain network administrative tasks to other IAM members:
 * Network Admin:
-  * Shared VPC Admin define a Network Admin by granting an IAM member the Network Admin `compute.networkAdmin` role to the host project. Network Admins have full control over all network resources except for firewall rules and SSL certificates.
+  * Shared VPC Admin define a Network Admin by granting an IAM member the Network Admin `compute.networkAdmin` role to the host project. Network Admins have full control over all network resources except for firewall rules and SSL certificates. The network admin role does not allow a user to create, start, stop, or delete instances
+* Network User (`compute.networkUser`):
+  * Can use VPC networks and subnets that belong to the host project (Shared VPC). For example, a network user can create a VM instance that belongs to a host project network but they cannot delete or create new networks in the host project.
+* Network Viewer (`compute.networkViewer`):
+  * Read-only access to all networking resources.
 * Security Admin:
   * A Shared VPC Admin can define a Security Admin by granting an IAM member the Security Admin `compute.securityAdmin` role to the host project. Security Admins manage firewall rules and SSL certificates.
 
