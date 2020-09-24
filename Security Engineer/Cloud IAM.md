@@ -88,9 +88,17 @@ Enable SSO for cloud apps:
 Secure corporate access on personal devices:
 * https://cloud.google.com/identity/solutions/secure-corp-on-personal-devices
 
+The following diagram illustrates the flow for integrate you existing Identity and Access Management system.
+
+![IdP](images/integrating_your_current_identity_manageme.max-1500x1500.png)
+
 ## Google Cloud Directory and Directory Sync
 
 Google Cloud Directory Sync enables administrators to synchronize users, groups and other data from an Active Directory/LDAP service to their Google Cloud domain directory.
+
+You need to enable Cloud Platform to recognize your users, using one of two recommended methods: Google Cloud directory sync (shown on the left below), or third-party identity provider connectors to Cloud Identity (shown on the right below).
+
+![Sync Identities](images/Sync_identities.max-1100x1100_m0h2F9X.max-1100x1100.png)
 
 ![GC Directory Sync](images/active-directory-as-idp.svg)
 
@@ -103,9 +111,6 @@ Cloud Directory Sync queries the LDAP directory to retrieve the necessary inform
 [Configuring user provisioning](https://cloud.google.com/architecture/identity/federating-gcp-with-active-directory-synchronizing-user-accounts#configuring_user_provisioning)
 
 #### 1.2 Managing user accounts:
-
-
-
 * Grant roles to a Google group instead of to individual users when possible. It is easier to manage members in a Google group than to update an IAM policy. Make sure to control the ownership of the Google group used in IAM policies.
 
 * Use the security principle of least privilege to grant IAM roles; that is, only give the least amount of access necessary to your resources.
@@ -360,4 +365,6 @@ In most cases IAMs are the recommended approach for giving access to resources.
 * Audit logs record project-level permission changes
 * Audit policy changes
 * Export audit logs to Cloud Storage to store logs for longer periods of time
+* Service Account Key Rotation
+  * Create a new key, update app config, delete old key
 

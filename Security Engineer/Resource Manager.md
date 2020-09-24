@@ -66,6 +66,17 @@ The effective policy for a resource is the union of the policy set on the resour
 
 ![Policy Concepts](images/org-policy-concepts_1.svg)
 
+### Restricting by domains
+_Resource Manager_ provides a domain restriction contraint, used within an org policy, that can limit resource sharing based on domain.
+
+Organization policies can use this constraint to limit resource sharing to a specified set of one or more G Suite domains, and exceptions can be granted on a per-folder or per-project basis.
+
+The domain restriction constraint is not retroactive. Once a domain restriction is set, this limitation will apply to IAM policy changes made from that point forward, and not to any previous changes.
+
+_For example, consider two related organizations: examplepetstore.com and altostrat.com. You have granted an examplepetstore.com identity an IAM role in altostrat.com. Later, you decided to restrict identities by domain, and implemented an organization policy with the domain restriction constraint in altostrat.com. In this case, the existing examplepetstore.com identities would not lose access in altostrat.com. From that point, you could only grant IAM roles to identities from the altostrat.com domain._
+
+The domain restriction constraint is based on the `iam.allowedPolicyMemberDomains` list constraint.
+
 ### Constraints
 
 A **_constraint_** is a definition of the behaviors that are controlled by an organization policy. A constraint has a type, either list or boolean.

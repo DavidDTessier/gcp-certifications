@@ -653,6 +653,30 @@ The following roles a needed in order to manage secrets:
 
 ![Secret Manager IAM](images/secretmanager_iams.png)
 
+You can also you the Ch gsutil command to grant/update IAM policies:
+
+```
+gsutil iam ch user:john.doe@example.com:objectCreator gs://ex-bucket
+```
+
+Make a bucket publicly readable:
+
+```
+gsutil iam ch allUsers:objectViewer gs://ex-bucket
+```
+
+Or use the gsutil acl ch command to update ACLs
+
+Grants everyone read access:
+```
+gsutil acl ch -u AllUsers:R gs://example-bucket/example-object
+```
+
+Individual user:
+```
+gsutil acl ch -u john.doe@example.com:WRITE gs://example-bucket
+```
+
 ## Secret Rotation
 Secrets can be rotated by adding a new secret version to the secret. Any version of a secret can be accessed as long as it is enabled. 
 
@@ -719,6 +743,13 @@ There are several tiers or storage classes offered by Cloud Storage:
   * lowest storage fees
   * ideal for data that you will not touch for 1 year
   * DR scenerios
+
+## Encrypting Data with gsutil
+
+```
+gsutil -o 'GSUtil:encryption_key=projects/PROJECT_ID/locations/LOCATION/keyRings/KEYRING/cryptoKeys/KEYNAME' \
+       cp /some/local/file gs://my-bucket/
+```
 
 ## Enabling logging within a bucket
  ```
