@@ -7,7 +7,18 @@ By default, at the storage layer, Google uses _Envelope Encryption_, with its in
 
 ![Envelope Encryption](images/envelope_encryption_store.svg)
 
+To encrypt data using envelope encryption:
 
+* Generate a DEK locally. 
+  * You could do this with an open source library such as OpenSSL, specifying a cipher type and a password from which to generate the key. You can also specify a salt and digest to use, if desired.
+
+* Use this DEK locally to encrypt your data.
+  * As an example, you could use OpenSSL as shown in the encrypting the message example. For best practice, use 256-bit Advanced Encryption Standard (AES-256) cipher in Galois Counter Mode (GCM).
+
+* Generate a new key in Cloud KMS, or use an existing key, which will act as the KEK. Use this key to encrypt (wrap) the DEK.
+
+* Store the encrypted data and the wrapped DEK.
+  
 ## Encryption at Rest
 By default GCP encrypts all customers data stored at rest using the Advanced Encryption Standard (AES) algorithm using a unique data encryption key (DEK).
 
