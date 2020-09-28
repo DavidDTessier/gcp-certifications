@@ -114,7 +114,7 @@ In addition to firewall rules that you create, Google Cloud has other rules that
 
 * Google Cloud doesn't allow certain IP protocols, such as egress traffic on TCP port 25 within a VPC network.
 * Google Cloud always allows communication between a VM instance and its corresponding metadata server at 169.254.169.254. 
-* Every network has two implied firewall rules that permit outgoing connections and block incoming connections. Firewall rules that you create can override these implied rules. These implied rules apply to all instances in the network.
+* Every network has **two implied firewall rules that permit outgoing connections and block incoming connections**. Firewall rules that you create can override these implied rules. These implied rules apply to all instances in the network.
 * The default network is pre-populated with firewall rules that you can delete or modify.
 
 Firewall rules only support IPv4 connections. 
@@ -204,10 +204,8 @@ The following is network traffic that is allways blocked by GCP and firewall rul
 
 **Filter by service account vs network tag**
 If you need strict control over how firewall rules are applied to VMs, use target service accounts and source service accounts instead of target tags and source tags:
-
-A network tag is an arbitrary attribute. One or more network tags can be associated with an instance by any Identity and Access Management (IAM) member who has permission to edit it. IAM members with the Compute Engine Instance Admin role to a project have this permission. IAM members who can edit an instance can change its network tags, which could change the set of applicable firewall rules for that instance.
-
-A service account represents an identity associated with an instance. Only one service account can be associated with an instance. You control access to the service account by controlling the grant of the Service Account User role for other IAM members. For an IAM member to start an instance by using a service account, that member must have the Service Account User role to at least that service account and appropriate permissions to create instances (for example, having the Compute Engine Instance Admin role to the project).
+  * A network tag is an arbitrary attribute. One or more network tags can be associated with an instance by any Identity and Access Management (IAM) member who has permission to edit it. IAM members with the Compute Engine Instance Admin role to a project have this permission. IAM members who can edit an instance can change its network tags, which could change the set of applicable firewall rules for that instance.
+  * A service account represents an identity associated with an instance. Only one service account can be associated with an instance. You control access to the service account by controlling the grant of the Service Account User role for other IAM members. For an IAM member to start an instance by using a service account, that member must have the Service Account User role to at least that service account and appropriate permissions to create instances (for example, having the Compute Engine Instance Admin role to the project).
 
 You cannot mix filtering by service account or network tags.
 
@@ -332,7 +330,7 @@ Secure GCP resources with service perimeters._
 4. Grant access from outside a service perimeter using access levels (optional).
 5. Set up resource sharing between perimeters using service perimeter bridges (optional).
 
-[Creating a service perimeter]()
+[Creating a service perimeter](https://cloud.google.com/vpc-service-controls/docs/create-service-perimeters)
 
 #### Create an access policy
 An access policy collects the service perimeters and access levels you create for your Organization. An Organization can only have one access policy.
@@ -514,7 +512,7 @@ Traffic traveling between the two networks is encrypted by one VPN gateway, and 
 
 Offers an SLA of 99.9% service availability. Supports Static Routes or Dynamic Routes (with the use of a Cloud Router). Suppports IKEv1 and IKEv2 (Internet Key Exchange) using a shared secret (IKE preshared key).
 
-Cloud VPN traffic with either traverse the public internet of can use a direct peering line to Google's Network (Cloud Interconnect).
+Cloud VPN traffic will either traverse the public internet or can use a direct peering line to Google's Network (Cloud Interconnect).
 
 Each _Cloud VPN_ can support up to 3 Gbs when traffic is traversing a direct pering link, or 1.5 Gps when its traversing over the public internet.
 
@@ -524,7 +522,7 @@ Each _Cloud VPN_ can support up to 3 Gbs when traffic is traversing a direct per
 **VPN with Dynamic Routes using Cloud Router**
 ![VPN Dynamic Routes](images/VPN_Dynamic_Routes.png)
 
-New subnets in GCP or in the Peer network are discovered and shared, enabling connectivity between the two peers for both entire networks.
+New subnets in GCP or in the Peer network are discovered and shared, enabling connectivity between the two peers for both entire networks. No restart required.
 
 Two types of configuration
 * VPN Gateway:
@@ -659,3 +657,62 @@ Private Goolge API access is enabled on VPC subnets but is disabled by default. 
 You must also ensure that any Compute Engine instance that accesses a Google API has a matching `default-internet-gateway` route set in its GCP-based network. All GCP networks have a `default-internet-gateway` route, unless the route has been manually deleted.
 
 [Private Google Access and Cloud NAT Lab](https://www.qwiklabs.com/focuses/4362?parent=catalog)
+
+* private.googleapis.com (199.36.153.8/3)
+  * Enables API access to most Google APIs and services regardless of whether they are supported by VPC Service Controls. Includes API access to Maps, Google Ads, Google Cloud platform, and most other Google APIs, including the lists below. Does not support G Suite web applications.
+  * Use private.googleapis.com to access Google APIs and services using a set of IP addresses only routable from within Google Cloud. Choose private.googleapis.com under these circumstances:
+  * You don't use VPC Service Controls.
+  * You do use VPC Service Controls, but you also need to access Google APIs and services that are not supported by VPC Service Controls.
+* restricted.googleapis.com (199.36.153.4/30)
+  * Use restricted.googleapis.com to access Google APIs and services using a set of IP addresses only routable from within Google Cloud. Choose restricted.googleapis.com when you only need access to Google APIs and services that are supported by VPC Service Controls — restricted.googleapis.com does not permit access to Google APIs and services that do not support VPC Service Controls.
+
+## Serverless VPC Access
+
+Serverless VPC Access enables you to connect from a serverless environment on Google Cloud (Cloud Run (fully managed), Cloud Functions, or the App Engine standard environment) directly to your VPC network. This connection makes it possible for your serverless environment to access Compute Engine VM instances, Memorystore instances, and any other resources with an internal IP address. For example, this can be helpful in the following cases:
+
+* You use Memorystore to store data for a serverless service.
+* Your serverless workloads use third-party software that you run on a Compute Engine VM.
+* You run a backend service on a Managed Instance Group in Compute Engine and need your serverless environment to communicate with this backend without exposure to the public internet.
+* Your serverless environment needs to access data from your on-premises database through Cloud VPN.
+
+Connection to a VPC network enables your serverless environment to send requests to internal DNS names and internal IP addresses as defined by RFC 1918 and RFC 6598. These internal addresses are only accessible from Google Cloud services. Using internal addresses avoids exposing resources to the public internet and improves the latency of communication between your services.
+
+### Serverless VPC Access Connector
+Serverless VPC Access is based on a resource called a connector. A connector handles traffic between your serverless environment and your VPC network. When you create a connector in your Google Cloud project, you attach it to a specific VPC network and region. You can then configure your serverless services to use the connector for outbound network traffic.
+
+When you create a connector, you also assign it an IP range. Traffic sent through the connector into your VPC network will originate from an address in this range. The IP range must be a CIDR /28 range that is not already reserved in your VPC network. An implicit firewall rule with priority 1000 is created on your VPC network to allow ingress from the connector's IP range to all destinations in the network.
+
+Serverless VPC Access automatically provisions throughput for a connector in 100 Mbps increments depending on the amount of traffic sent through the connector. Automatically provisioned throughput can only scale up and does not scale down. A connector always has at least 200 Mbps provisioned and can scale up to 1000 Mbps. You can configure throughput scaling limits when you create a connector; note that actual throughput through a connector may exceed the provisioned throughput, especially for short traffic bursts.
+
+IAM Roles:
+
+* Serverless VPC Access Admin
+  * `roles/vpcaccess.admin`	
+  * Full access to all Serverless VPC Access resources
+* Serverless VPC Access User
+  * `roles/vpcaccess.user`
+  * User of Serverless VPC Access connectors
+* Serverless VPC Access Viewer
+  * `roles/vpcaccess.viewer`	
+  * Viewer of all Serverless VPC Access resources
+
+![Serverless VPC Access](images/serverless-vpc-access.svg)
+
+To enable this feature you need to enable the API:
+
+```
+gcloud services enable vpcaccess.googleapis.com
+```
+
+To create the connector:
+
+```
+gcloud compute networks vpc-access connectors create [CONNECTOR_NAME] \
+--network [VPC_NETWORK] \
+--region [REGION] \
+--range [IP_RANGE]
+```
+
+[Configure VPC Access for CLoud Run](https://cloud.google.com/run/docs/configuring/connecting-vpc)
+[Configure VPC Access for Cloud Functions](https://cloud.google.com/functions/docs/connecting-vpc)
+Configure VPC Access for App Engine Standard](https://cloud.google.com/appengine/docs/standard/python/connecting-vpc)

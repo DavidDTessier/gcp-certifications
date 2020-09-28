@@ -4,10 +4,16 @@
 The following diagram outlines a sample resource outline in Google Cloud:
 ![Resource Outline](images/cloud-folders-hierarchy.png).
 
-The _Origanization_ node is the root node and all access control policies will trickle down from there. Org admins can set [Originizational Policies](https://cloud.google.com/resource-manager/docs/organization-policy/overview), which will control access to folders and/or projects at the organization level. 
+The _Origanization_ node is the root node and all access control policies will trickle down from there. Org admins can set [Originizational Policies](https://cloud.google.com/resource-manager/docs/organization-policy/overview), which is is a configuration of restrictions that enforce retristrictions to control access to folders and/or projects at the organization level on resources and their descendants.
 ![Org Policy](images/org-policy-concepts.svg)
 
 Best Practices For Organizations can be found [here](https://cloud.google.com/docs/enterprise/best-practices-for-enterprise-organizations).
+
+Key Best Practices:
+* Map you organizational structure to GCP
+  * Top level node represents you organization, folders represent business units/departments and/or teams.
+* Federate your identity provider with Google Cloud
+  * If your organization uses an on-premises or third-party identity provider, synchronize your user directory with Cloud Identity to let users access Google Cloud with their corporate credentials. This way, your identity platform remains the source of truth while Cloud Identity controls how your employees access Google services.
 
 
 ## Resource Hierarchy

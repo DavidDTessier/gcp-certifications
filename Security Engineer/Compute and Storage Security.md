@@ -62,7 +62,11 @@ Connecting via Bastion Host to instances without external IPs:
 
 ![Bastion Host](images/bastion.png)
 
-Use Identity Aware Proxy for TCP Forwarding.
+**Use Identity Aware Proxy for TCP Forwarding**
+
+IAP's TCP forwarding feature allows users to connect to arbitrary TCP ports on Compute Engine instances. For general TCP traffic, IAP creates a listening port on the local host that forwards all traffic to a specified instance. IAP then wraps all traffic from the client in HTTPS. Users gain access to the interface and port if they pass the authentication and authorization check of the target resource's Identity and Access Management (IAM) policy.
+
+![How IAP TCP Forwarding Works](images/iap-tcp-forwarding-diagram.png)
 
 To configure IAP setup firewalls like such:
 

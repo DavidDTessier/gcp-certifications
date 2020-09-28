@@ -18,8 +18,6 @@ GPC also provides some security assessment services such as :
     * Web Security Scanner
     * Forseti Security
 
-
-
 # Google Security Overview
 Google's phyiscal data centers are protected with a layered security model.
 * Custom designed electronic access cards, biometric and metal detectors
