@@ -468,7 +468,7 @@ By defulat GKE encrypts content stored at rest, including Secrets.
 
 _Application-layer Secrets Encryption_ is an additional layer of security for sensitive data, such as Secrets, stored in [etcd](https://kubernetes.io/docs/concepts/overview/components/#etcd). To use this feature a Cloud KMS key and GKE service account **MUST** be created. The key must be in the same location as the cluster in order to decrease latency.
 
-GKE will encrypt secrets locally using the [AES-CBC](https://tools.ietf.org/html/rfc3602) provider, using local data enccryotion keys (DEKs) and the DEKs are encrypted with a key encryption key (KEK) that is managed in Cloud KMS.
+GKE will encrypt secrets locally using the [AES-CBC](https://tools.ietf.org/html/rfc3602) provider, using local data encryption keys (DEKs) and the DEKs are encrypted with a key encryption key (KEK) that is managed in Cloud KMS.
 
 This is referred to as _Envelope Encryption_, which provides the following benefits:
 

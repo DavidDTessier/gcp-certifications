@@ -494,6 +494,28 @@ gcloud compute target-ssl-proxies | target-https-porxy create NAME \
     --ssl-certificate SSL_CERTIFICATE_NAME \
     [--ssl-policy SSL_POLICY_NAME]
 ```
+### Network Endpoint Groups (NEGs)
+A _network endpoint group (NEG)_ is a configuration object which specifies a group of backend endpoints/services. HTTPs (internal/external) LBs and External SSL/TCP proxy LBs support NEGs.
+
+NEG Types:
+
+* Zonal
+  * Contains one or more endpoints that can be compute engine vms or services running on the VMs.
+  * Endpoints are specified via `IP:port` combo
+* Internet
+  * contains a single endpoint that is hosted outside of GCP.
+  * specified by a hostname `FQDN:port` or `IP:port` combination.
+* Serverless
+  * points to Cloud Run, App Engine or Cloud Functions services
+  * MUST reside in the same region
+
+**Standalone NEGs**
+When NEGs are deployed with load balancers provisioned by anything other than Ingress, they are considered standalone NEGs. Standalone NEGs are deployed and managed through the NEG controller, but the forwarding rules, health checks, and other load balancing objects are deployed manually.
+
+Standalone NEGs do not conflict with Ingress enabled container-native load balancing.
+
+The following diagram shows the difference in how the load balancing objects are deployed in each scenerio:
+![Standalone NEGs](images/sneg2.svg)
 
 ## Network Isolation
 If you want complete isolation between various applications, customers, etc., you could create multiple networks.

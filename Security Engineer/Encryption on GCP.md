@@ -82,7 +82,7 @@ These are the following options:
     * client can create and manage their own encryption keys for server-side encryption, which act as and additional encryption layer on top of the standard Cloud Storag Encryption.
     * these keys ARE NOT stored on Googles servers nor do they manage the keys
     * Examples for creating and using CSEK's : https://cloud.google.com/storage/docs/encryption/using-customer-supplied-keys
-    * Currently Cloud Storage Transfer Service, Cloud Dataflow and Cloud Dataproc DO NOT support objects encrypted with CSEKs.
+    * **Currently Cloud Storage Transfer Service, Cloud Dataflow and Cloud Dataproc DO NOT support objects encrypted with CSEKs.**
     * You cannot use CSEKs on a storage bucket, only on individual objects.
     * More details on CSEKs: https://cloud.google.com/storage/docs/encryption/customer-supplied-keys
   * **Customer-managed encryption keys (CMEK)**:
@@ -173,7 +173,7 @@ You can grant or restrict the ability to perform specific cryptographic operatio
 
 * A key directly
 * A key ring, inherited by all keys in that key ring
-*A Google Cloud project, inherited by all keys in the project
+* A Google Cloud project, inherited by all keys in the project
 * A Google Cloud folder, inherited by all keys in all projects in the folder
 * A Google Cloud organization, inherited by all keys in folders in the organization
 

@@ -413,6 +413,164 @@ Labs:
 
 [Redacting Confidential Data within your pipelines in Cloud Data Fusion using Cloud DLP](https://www.qwiklabs.com/focuses/12373?catalog_rank=%7B%22rank%22%3A1%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6763461)
 
+**Inspection Rules**
+This helps refine the scan results that Cloud DLP returns by modifying the detection mechanism of a given infoType detector.
+
+If you want to exclude or include more values from the results that are returned by a built-in infoType detector, you can create a new custom infoType from scratch and define all the criteria that Cloud DLP should look for.
+
+There are two types of inspection rules:
+
+* _Exclusion rules_:
+  * help exclude false or unwanted findings
+* _Hotword rules_:
+  * help detect additional findings
+
+Samples:
+
+Exclusion Rules:
+```
+...
+    "inspectConfig":{
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "dictionary":{
+                  "wordList":{
+                    "words":[
+                      "example@example.com"
+                    ]
+                  }
+                },
+                "matchingType": "MATCHING_TYPE_FULL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+```
+
+Or using regex patterns
+
+```
+...
+    "inspectConfig":{
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "regex":{
+                  "pattern":".+@example.com"
+                },
+                "matchingType": "MATCHING_TYPE_FULL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+
+```
+
+You can also exclude specific infoTypes:
+
+```
+...
+    "inspectConfig":{
+      "infoTypes":[
+        {
+          "name":"DOMAIN_NAME"
+        },
+        {
+          "name":"EMAIL_ADDRESS"
+        }
+      ],
+      "customInfoTypes":[
+        {
+          "infoType":{
+            "name":"EMAIL_ADDRESS"
+          },
+          "exclusionType":"EXCLUSION_TYPE_EXCLUDE"
+        }
+      ],
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"DOMAIN_NAME"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "excludeInfoTypes":{
+                  "infoTypes":[
+                    {
+                      "name":"EMAIL_ADDRESS"
+                    }
+                  ]
+                },
+                "matchingType": "MATCHING_TYPE_PARTIAL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+```
+
+Hotword rules:
+
+* You want to change likelihood values assigned to scan matches based on the match's proximity to a hotword. For example, you want to set the likelihood value higher for matches on patient names depending on the names' proximity to the word "patient."
+
+```
+...
+  "inspectConfig":{
+    "ruleSet":[
+      {
+        "infoTypes":[
+          {
+            "name":"PERSON_NAME"
+          }
+        ],
+        "rules":[
+          {
+            "hotwordRule":{
+              "hotwordRegex":{
+                "pattern":"patient"
+              },
+              "proximity":{
+                "windowBefore":50
+              },
+              "likelihoodAdjustment":{
+                "fixedLikelihood":"VERY_LIKELY"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "minLikelihood":"VERY_LIKELY"
+  }
+...
+```
+
 ## Storage Scans
 Cloud DLP supports scan data stored in Cloud Storage, Datastore and BigQuery.
 When scanning data in Cloud Storage it supports scanning: binary, text, image, Word, PDF, and Apache Avro files.
@@ -441,7 +599,12 @@ POST https://dlp.googleapis.com/v2/projects/[PROJECT-ID]/dlpJobs?key={YOUR_API_K
         "fileSet":{
           "url":"gs://[BUCKET-NAME]/*"
         },
-        "bytesLimitPerFile":"1073741824"
+        "bytesLimitPerFile":"200",
+        "fileTypes":[
+          "TEXT_FILE"
+        ],
+        "filesLimitPercent":90,
+        "sampleMethod": "RANDOM_START"
       },
       "timespanConfig":{
         "startTime":"2017-11-13T12:34:29.965633345Z",
@@ -465,7 +628,8 @@ POST https://dlp.googleapis.com/v2/projects/[PROJECT-ID]/dlpJobs?key={YOUR_API_K
             "table":{
               "projectId":"[PROJECT-ID]",
               "datasetId":"[DATASET-ID]"
-            }
+            },
+            "outputSchema":"BASIC_COLUMNS"
           }
         }
       }
@@ -501,6 +665,8 @@ For scanning BigQuery use the `bigQueryOptions`:
           "datasetId":"[BIGQUERY-DATASET-NAME]",
           "tableId":"[BIGQUERY-TABLE-NAME]"
         },
+        "rowsLimit": "1000",
+        "sampleMethod": "RANDOM_START",
         "identifyingFields":[
           {
             "name":"person.contactinfo"
