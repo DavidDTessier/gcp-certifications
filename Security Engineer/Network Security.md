@@ -409,25 +409,25 @@ GC Cloud Load balancers is built on the following propretary products:
 * [Envoy proxy](https://www.envoyproxy.io/)
   * is an open source edge and service proxy, designed for cloud-native applications
 
-* Internal HTTP(s) Load Balancer
+* Internal HTTP(s) Load Balancer (Layer 7)
   * built on the Andromeda network virtualization stack and is a managed service based on the open source Envoy proxy. This load balancer provides proxy-based load balancing of Layer 7 application data. You specify how traffic is routed with URL maps. The load balancer uses an internal IP address that acts as the frontend to your backends.
-* External HTTP(s) Load Balancer
+* External HTTP(s) Load Balancer (Layer 7)
   * is implemented on GFEs. GFEs are distributed globally and operate together using Google's global network and control plane. In Premium Tier, GFEs offer cross-regional load balancing, directing traffic to the closest healthy backend that has capacity and terminating HTTP(S) traffic as close as possible to your users.
   * Provides DDoS Protection
-* Internal TCP/UDP Load Balancer
+* Internal TCP/UDP Load Balancer (Layer 4)
   * is built on the Andromeda network virtualization stack. Internal TCP/UDP Load Balancing enables you to load balance TCP/UDP traffic behind an internal load balancing IP address that is accessible only to your internal virtual machine (VM) instances. By using Internal TCP/UDP Load Balancing, an internal load balancing IP address is configured to act as the frontend to your internal backend instances. You use only internal IP addresses for your load balanced service. Overall, your configuration becomes simpler.
   * supports regional managed instance groups so that you can autoscale across a region, protecting your service from zonal failures.
-* External TCP/UDP Load Balancer
+* External TCP/UDP Load Balancer (Layer 4)
   * Built on Maglev. 
   * enables you to load balance traffic on your systems based on incoming IP protocol data, including address, port, and protocol type. It is a regional, non-proxied load balancing system. Use Network Load Balancing for UDP traffic, and for TCP and SSL traffic on ports that are not supported by the SSL proxy load balancer and TCP proxy load balancer. A network load balancer is a pass-through load balancer that does not proxy connections from clients.
-* SSL Proxy Load Balancer
+* SSL Proxy Load Balancer (Layer 7)
   * intended for non-HTTP(S) traffic
   * Implemented on GFEs that are distributed globally. 
   * If you choose the Premium Tier of Network Service Tiers, an SSL proxy load balancer is global. In Premium Tier, you can deploy backends in multiple regions, and the load balancer automatically directs user traffic to the closest region that has capacity. If you choose the Standard Tier, an SSL proxy load balancer can only direct traffic among backends in a single region.
   * Provides DDoS protection
   * Supports load balancing on ports:
     * 25, 43, 110, 143, 195, 443, 465, 587, 700, 993, 995, 1883, 3389, 5222, 5432, 5671, 5672, 5900, 5901, 6379, 8085, 8099, 9092, 9200, and 9300.
-* TCP Proxy Load Balancer
+* TCP Proxy Load Balancer (Layer 4)
   * implemented on GFEs that are distributed globally. If you choose the Premium Tier of Network Service Tiers, a TCP proxy load balancer is global. In Premium Tier, you can deploy backends in multiple regions, and the load balancer automatically directs user traffic to the closest region that has capacity. If you choose the Standard Tier, a TCP proxy load balancer can only direct traffic among backends in a single region.
 
 Choosing the right Cloud Load Balancer:

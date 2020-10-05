@@ -572,7 +572,7 @@ Requirements for Cloud Armour Usage:
 **IAM Permissions**:
 ![Cloud Armour IAM](images/cloud_armour_iam.png)
 
-## Security Policies
+## WAF / Security Policies
 
 ![Cloud Armour Sec Policies](images/Cloud_Armour_Policies.png)
 
@@ -601,6 +601,71 @@ gcloud compute security-policies rules create 1000 \
     --src-ip-ranges "192.0.2.0/24" \
     --action "allow"
 ```
+
+Create a policy leveraging the advanced expression:
+
+
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "inIpRange(origin.ip, '1.2.3.4/32') && has(request.headers['user-agent']) && request.headers['user-agent'].contains('Godzilla')" \
+   --action allow \
+   --description "Block User-Agent 'Godzilla'"
+```
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "origin.region_code == 'AU'" \
+   --action "deny-403" \
+   --description "AU block"
+```
+
+**Pre-Configured Rules**
+You can also use the preconfigured rules that exist:
+
+To view the pre-configured rules list :
+
+`gcloud compute security-policies list-preconfigured-expression-sets`
+
+Result:
+```
+    EXPRESSION_SET
+sqli-canary
+    RULE_ID
+    owasp-crs-v030001-id942110-sqli
+    owasp-crs-v030001-id942120-sqli
+    …
+xss-canary
+    RULE_ID
+    owasp-crs-v030001-id941110-xss
+    owasp-crs-v030001-id941120-xss
+…
+sourceiplist-fastly
+sourceiplist-cloudflare
+sourceiplist-imperva
+```
+
+The output will display the list of rules that can be found [here](https://cloud.google.com/armor/docs/rule-tuning#preconfigured_rules).
+
+**Tuning WAF Rules**
+
+Each preconfigured rule consists of multiple signatures. Incoming requests are evaluated against the preconfigured rules. A request matches a preconfigured rule if the request matches any of the signatures that are associated with the preconfigured rule. A match is made when the `evaluatePreconfiguredExpr()` command returns the value `true`.
+
+If you decide that a preconfigured rule matches more traffic than is necessary or if the rule is blocking traffic that needs to be allowed, the rule can be tuned to disable noisy or otherwise unnecessary signatures. To disable signatures in a particular preconfigured rule, you provide a list of IDs of the unwanted signatures to the `evaluatePreconfiguredExpr()` command. The following example excludes two CRS rule IDs from the preconfigured `xss-stable` WAF rule:
+
+```
+evaluatePreconfiguredExpr('xss-stable', ['owasp-crs-v020901-id981136-xss', 'owasp-crs-v020901-id981138-xss'])
+```
+
+The following command adds a rule that uses a pre-configured expression set to mitigate SQLi attacks:
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "evaluatePreconfiguredExpr('sqli-stable')" \
+   --action "deny-403"
+```
+
+
 
 Attach the policy to backend services
 ```

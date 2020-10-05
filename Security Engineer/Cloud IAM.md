@@ -368,3 +368,8 @@ In most cases IAMs are the recommended approach for giving access to resources.
 * Service Account Key Rotation
   * Create a new key, update app config, delete old key
 
+The following command lists all grantable roles for a given resource.
+```
+gcloud iam list-grantable-roles [full-resource-name]
+```
+

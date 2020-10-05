@@ -142,6 +142,76 @@ Compute Engine predefines the following curated IAM roles that you can use for i
 
 As a best practice, Google recommends keeping all your custom images in a single project dedicated to hosting these images and nothing else.
 
+# Google App Engine Security Best Practices
+
+Leverage Identity-Aware Proxy (IAP) for limiting access to specific users [Configure IAP For GAE](https://www.qwiklabs.com/focuses/5562?parent=catalog#).
+* Use internal for G-Suite accounts
+* Use External for G-Mail accounts
+
+**HTTPS Requests**
+Use HTTPS requests to access to your App Engine app securely. Depending on how your app is configured, you have the following options:
+* default service:
+  * https://[PROJECT_ID].[REGION_ID].r.appspot.com
+* specific service
+  * https://[VERSION_ID]-dot-[SERVICE_ID]-dot-[PROJECT_ID].[REGION_ID].r.appspot.com
+
+You can force HTTPS all the time by leveraging _Handlers_ within the application YAML configuration as shown below:
+
+```
+runtime: go112 # replace with go111 for Go 1.11
+service: test-app
+handlers:
+- url: /.*
+  script: auto
+  secure: always
+  redirect_http_response_code: 301
+
+```
+**Access Control**
+Leverage IAM Access to restrict or grant access to App Engine. Assign roles to either service accounts or users.
+
+IAM Roles:
+* App Engine Admin:
+  * R/W/M all app configs and settings
+  * Use cases:
+    * Owner/Admin
+    * On-call engineer
+    * Sys Admin
+* App Engine Service Admin:
+  * R/O access to app configs/settings
+  * Write access to service-level and version-level settings, including traffic configs.
+  * Cannot deploy
+  * Use Cases:
+    * Release Engineer
+    * DevOps
+    * On-call engineer
+    * Sys Admin
+* App Engine Deployer
+  * R/O to all app configs and settings
+  * Write access only to deploy and create new versions
+  * Delete Old versions that are not serving traffic
+  * Cannot modify and existing version, nor change traffic configs
+  * Use Cases:
+    * Deployment account
+    * Release engineer
+* App Engine View
+  * R/O to all app configs and settings
+  * Use Cases:
+    * Need visibility into app but no need to modify
+    * Audit type of role for compliance checking
+* App Engine Code Viewer
+  * R/O to all app configs, settings and deployed source code
+  * Use Cases:
+    * Need visibility into the app and its source code but not modify it
+    * DevOps User needing to diagnose prod issues.
+
+**App Engine Firewall**
+Enables you to control access to your App Engine app through a set of rules that can either allow or deny requests from the specified ranges of IP addresses.
+
+[Controlling App Access with Firewalls](https://cloud.google.com/appengine/docs/standard/go/creating-firewalls)
+
+**Ingres Controls**
+By default, your App Engine app receives all HTTP requests that are sent to its appspot URL or to a custom domain that you have configured for your app. For apps in the flexible environment, this includes requests from the internet as well as requests from a Virtual Private Cloud network that you can create in your app's Google Cloud project. Apps in the standard environment do not receive requests from a Virtual Private Cloud (VPC).
 
 # Google Kubernetes Engine (GKE)
 Google Kubernetes Engine (GKE) provides a managed environment for deploying, managing, and scaling your containerized applications using Google infrastructure. The GKE environment consists of multiple machines (specifically, Compute Engine instances) grouped together to form a cluster.
