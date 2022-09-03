@@ -1,3 +1,4 @@
+
 # Application Security Vulnerabilities
 Application security is often undefined and untested.
 
@@ -20,7 +21,7 @@ Is a central authentication and authorization layer that can be used for applica
 
 ![Cloud IAP](images/Cloud%20IAP.png)
 
-When a user logs into the application the request is forwarded to the Cloud IAP proxy which requires the user to log in. The proxy will determin if the user is allowed to access the application, if they are, they are then forwarded to the requested app page.
+When a user logs into the application the request is forwarded to the Cloud IAP proxy which requires the user to log in. The proxy will determine if the user is allowed to access the application, if they are, they are then forwarded to the requested app page.
 
 Labs:
 
@@ -43,7 +44,7 @@ There are three types of custom infoType detectors:
 * _Stored custom dictionary detectors_:
   * generate by Cloud DLP from datasets stored in BigQuery or Cloud Storage.
   * Upto ten million words/phrases
-* _Regular expressions(regex):
+* _Regular expressions(regex) detectors_:
   * enables matching on regex expression pattern
 
 You can also _fine tune_ the scan results using _inspection rules_.
@@ -51,7 +52,16 @@ You can also _fine tune_ the scan results using _inspection rules_.
 * _Exclusion rules_:
   * excluding false or unwanted findings
 * _Hotword rules_:
-  * increase the quantity or accuracy of findings returned by adding rules to a buil-in or custom infoType detector.
+  * increase the quantity or accuracy of findings returned by adding rules to a built-in or custom infoType detector.
+
+Likelihood is determined by the number of mathcing elements a result contains:
+
+* LIKELYHOOD_UNSPECIFIED
+* VERY_UNLIKELY
+* UNLIKELY
+* POSSIBLE
+* LIKELY
+* VERY_LIKELY
 
 **Custom infoType Example**
 
@@ -77,6 +87,22 @@ POST https://dlp.googleapis.com/v2/projects/[PROJECT_ID]/content:inspect?key={YO
   }
 }
 ```
+
+## De-Identification
+
+Process of removing identifying information from data. The DLP API detects sensitive data such as personally identifiable information (PII) and then uses a de-identification transformation to mask, delete, or otherwise obscure the data.
+
+The API uses the following methods for de-identification:
+
+* Date Shifting
+  - Randomly shift a set of dates but preserves the sequence and duration of a period of time
+  - Done in context to an individual or an entity
+  - Each individual's dates are shifted by and amount of time that is unique to that individual
+* Generalization and Bucketing
+  - Process of taking a distinguishing value and abstracting it into a more general, les distinguishing value
+  - Attempts to preserve data utility while also reducing the identifiability of the data
+  - DLP supports a generalization technique called _bucketing_
+  - Group records into smaller buckets
 
 ## Authentication
 * API Key:
@@ -406,7 +432,7 @@ DLP offers other forms of transformations that leverages encryption keys to encr
   * Leverages the [format-preserving encryption](https://en.wikipedia.org/wiki/Format-preserving_encryption) with [FFX mode](http://www.connect-community.org/blog/2016/4/28/ffx-modes-of-the-aes-encryption-algorithm-specified-in-nists-sp-800-38g) enabled to generate a token value and replaces detective sensitive data in the input. The token is same length as in the input value and uses the same alphabet. By leverage the additional `surrogateInfoType` element the token can be _re-Identified_ using the original encryption key.
 * [Deterministic encryption](https://cloud.google.com/dlp/docs/transformations-reference#de)
   * Leverages [AES in Synthetic Initialization Vector Mode (AES-SIV)](https://tools.ietf.org/html/rfc5297) to generate a token value and replaces detective sensitive data found in the input. By leverage the additional `surrogateInfoType` element the token can be _re-Identified_ using the original encryption key.
-  
+
 Labs:
 
 [Data Loss Prevention - Quick Lab](https://google.qwiklabs.com/focuses/600?catalog_rank=%7B%22rank%22%3A3%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6768410)
@@ -583,10 +609,10 @@ Best practices:
 * Limit scope instead of all data. Use sampling and exclusion rules.
 * Avoid using all infoTypes if they are not needed
 * Schedule scans regularly. Scans will only inspect data since last scan
-  
+
 Findings can be persisted to BigQuery for later analysis.
 
-Sample 
+Sample
 
 Scanning data in Cloud Storage:
 ```
@@ -679,7 +705,7 @@ For scanning BigQuery use the `bigQueryOptions`:
 
 A Denial of Service (DoS) attack is an attempt to render your service or application unavailable to your end users.
 
-With Distributed Denial of Service (DDoS) attacks, the attackers use multiple resources (often a large number of compromised hosts/instances) to orchestrate large scale attacks against targets. 
+With Distributed Denial of Service (DDoS) attacks, the attackers use multiple resources (often a large number of compromised hosts/instances) to orchestrate large scale attacks against targets.
 
 Mitigation Best Practices:
 * **Reduce the attack surface for GCE Deployment**:
@@ -900,7 +926,7 @@ Security Command Center is the canonical security and risk database for Google C
 
 * Premium Features
   * Includes Standar Tier features
-    * with additional monitoring and reporting for 
+    * with additional monitoring and reporting for
       * CIS 1.0
       * PCI DSS v3.2.1
       * NIST 800-53
@@ -930,12 +956,13 @@ Security Command Center is the canonical security and risk database for Google C
 # Forseti
 Forseti gives you tools to understand all the resources you have in Google Cloud Platform (GCP). The core Forseti modules work together to provide complete information so you can take action to secure resources and minimize security risks.
 
-* Inventory: 
-  * regularly collects data from your GCP resources and makes it available, via Cloud SQL, to other modules. 
-  * can be configured to run as often as you want
+* Inventory:
+  *  Saves an inventory snapshot of your GCP resources to CLoud SQL
+  * Understand current resources in GCP
+  * can be configured to run and update snapshot as often as you want
   * send email notifications when resource snapshots have been updated
 * Scanner:
-  * periodically compares the rules of GCP resource policies against the policies collected by Inventory, and saves the output for your review.
+  * periodically compares the rules of GCP resource policies against the policies collected by Inventory, and saves the output for your review into Cloud SQL or Cloud Storage
 * Explain:
   *  helps you understand, test, and develop Cloud Identity and Access Management (Cloud IAM) policies.
 * Enforcer :
@@ -952,7 +979,7 @@ But, you also have the option to run Forseti on a subset of resources:
 1. if you are Org Admin, and you want to run Forseti on a specific folder
 2. if you are Folder Admin, and you want to run Forseti on a specific folder
 3. if you are Project Admin, and you want to run Forseti on projects that are only owned by you.
-   
+
 NOTE: Inventory, Data Model, and Scanner will be supported for use on these subset of resources, but Explain will not be supported.
 
 The following Google APIS MUST be enabled in order to use Forseti:
@@ -961,7 +988,7 @@ The following Google APIS MUST be enabled in order to use Forseti:
 * serviceusage.googleapis.com
 * compute.googleapis.com
 * cloudasset.googleapis.com
-  
+
 ```
 gcloud services enable \
     cloudresourcemanager.googleapis.com \
@@ -1004,7 +1031,7 @@ module "forseti" {
   domain                   = "yourdomain.com"
   project_id               = "my-forseti-project"
   org_id                   = "2313934234"
-  
+
   config_validator_enabled = "true"
 }
 ```
@@ -1027,6 +1054,3 @@ Use the following steps:
    2. Use exists Forseti SA
 4. Enable the Cloud SCC API in the Forseti Project either via UI or CLI
    1. `gcloud services enable securitycenter.googleapis.com`
-
-
-

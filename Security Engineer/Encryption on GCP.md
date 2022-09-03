@@ -9,7 +9,7 @@ By default, at the storage layer, Google uses _Envelope Encryption_, with its in
 
 To encrypt data using envelope encryption:
 
-* Generate a DEK locally. 
+* Generate a DEK locally.
   * You could do this with an open source library such as OpenSSL, specifying a cipher type and a password from which to generate the key. You can also specify a salt and digest to use, if desired.
 
 * Use this DEK locally to encrypt your data.
@@ -18,7 +18,7 @@ To encrypt data using envelope encryption:
 * Generate a new key in Cloud KMS, or use an existing key, which will act as the KEK. Use this key to encrypt (wrap) the DEK.
 
 * Store the encrypted data and the wrapped DEK.
-  
+
 ## Encryption at Rest
 By default GCP encrypts all customers data stored at rest using the Advanced Encryption Standard (AES) algorithm using a unique data encryption key (DEK).
 
@@ -44,7 +44,7 @@ RE-encryption of data is required at least once every 5 years. Best practice is 
 Google persists/stores up to 20 verisons of encrypted data.
 
 ### Layers of Encryption
-Google uses several layers of encryption to protect customers data. 
+Google uses several layers of encryption to protect customers data.
 
 ![Encryption Layers](images/encryption_layers.png)
 
@@ -71,9 +71,9 @@ TLS in the GFE is implemented with BoringSSL, which is a Google-maintained open-
 For more details on how Encryption In Transit works at Google see the following [whitepaper](https://cloud.google.com/security/encryption-in-transit).
 
 ## Cloud Storage Encyption
-Cloud Storage always encrypts the customers data on the server before it is writtent to disk. Cloud storage manages server-side encryption keys on the clients behalf. It leverages AES-256 encyption by default.
+Cloud Storage always encrypts the customers data on the server before it is written to disk. Cloud storage manages server-side encryption keys on the clients behalf. It leverages AES-256 encryption by default.
 
-Alternatively the client has the option of using there own encryption keys for encrypting there data in Cloud Storage.
+Alternatively the client has the option of using their own encryption keys for encrypting their data in Cloud Storage.
 
 These are the following options:
 
@@ -185,6 +185,3 @@ You can grant or restrict the ability to perform specific cryptographic operatio
 [Using Customer-Managed Encryption Keys with Cloud Storage and Cloud KMS](https://docs.google.com/document/d/1KvP7GjtqYVUKGgUs0QzO1jhf2MBlQ3GiA9_8NYSVMOs/edit#heading=h.t0mbi9us7mcl)
 
 [Using Customer-Supplied Encryption Keys with Cloud Storage](https://docs.google.com/document/d/14AV9IgJXW_HYuii6JUUU0Ob0VN3hNMfzpQsfiz9K5Is/edit)
-
-
-

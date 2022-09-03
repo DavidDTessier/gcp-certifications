@@ -46,7 +46,7 @@ The small the RTO and RPO values are the more complex you DR strategy becomes. F
 
 DR environment should mimic your production environment with similar infrastructure and security controls. 
 
-Use of Infrastructure-As-Code is key for being able to replicate easily and quickly. 
+Use of Infrastructure-As-Code is key for being able to replicate easily and quickly.
 
 Regularly test your DR plan:
 * Automate infrastructure provisioning
@@ -57,3 +57,7 @@ Regularly test your DR plan:
 # Backup and Recovery
 
 Use Cloud Storage to store backups and plan daily routine backups.
+
+* Using gsutil command : `gsutil -m cp -r [SOURCE_DIR] gs://[BUCKET_NAME]`
+* On-Premise to Cloud Storage using a Partner Gateway solution
+* Use tiered storage pattern in GCP
