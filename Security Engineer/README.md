@@ -867,7 +867,7 @@ Ex:
 VPC Service Controls improves your ability to mitigate the risk of data exfiltration from Google Cloud services such as Cloud Storage and BigQuery. With VPC Service Controls, you create perimeters that protect the resources and data of services that you explicitly specify.
 
 To configure Service Control perimeter:
-1. If you want to use the gcloud command-line tool or the Access Context Manager APIs to create your service perimeters, create an access policy.
+1. If you want to use the `gcloud` command-line tool or the Access Context Manager APIs to create your service perimeters, create an access policy.
 
 _**Note**: You do not have to manually create an access policy if you are using the Cloud Console to manage VPC Service Controls. An access policy will be created for your Organization automatically.
 Secure GCP resources with service perimeters._
@@ -935,6 +935,10 @@ Considerations for choosing _auto mode_ over _custom mode_:
 
 **Default network**
 Unless you choose to disable it, each new project starts with a default network. The default network is an auto mode VPC network with pre-populated firewall rules.
+
+`default-allow-internal` fw rule which enables ingress connections within the VPC network for all protocols and ports between instances. This rule effectively permits inbound connections between VM instances in the same network.
+
+The other three rules in the auto-generated network are `default-allow-ssh`, `default-allow-rdp` and `default allow-icmp`. The inclusion of these rules allows port 22, Secure Shell or SSH, port 3389, remote desktop protocol or RDP and ICMP traffic from any source IP.
 
 You can disable the creation of default networks by creating an organization policy with the `compute.skipDefaultNetworkCreation` constraint. Projects that inherit this policy won't have a default network.
 
@@ -1306,6 +1310,21 @@ More details on the dig command can be found [here](https://linuxize.com/post/ho
 
 Google Cloud Armour helps you protect your Google Cloud deployments from multiple types of threats, including distributed denial-of-service (DDoS) attacks and application attacks like cross-site scripting (XSS) and SQL injection (SQLi). Google Cloud Armor features some automatic protections and some that you need to configure manually. This document provides a high-level overview of these features, several of which are only available for global external HTTP(S) load balancers and global external HTTP(S) load balancer (classic)s.
 
+# Cloud Armour
+Google Cloud Armor delivers defense at scale against infrastructure and application distributed denial of service (DDoS) attacks by using Google's global infrastructure and security systems.
+
+Google Cloud Armor security policies are made up of rules that filter traffic based on layer 3, 4, and 7 attributes. For example, you can specify conditions that match on an incoming request's IP address, IP range, region code, or request headers. Security policies are available only for backend services behind an externall HTTP(s) Load Balancer, which can be in Premium or Standard Tier.
+
+DDoS protection is automatically provided for HTTP(s), SSL Proxy and TCP Proxy Load Balancing.
+
+Requirements for Cloud Armour Usage:
+* Load Balancer **MUST** be an external HTTP(S) Load Balancer
+* The backend service's load balancing scheme **MUST** be `EXTERNAL`.
+* The backend service's protocol **MUST** be on of `HTTP`,`HTTPS` or `HTTP/2`
+
+**IAM Permissions**:
+![Cloud Armour IAM](images/cloud_armour_iam.png)
+
 ### Security Policies
 
 External load balancing is implemented at the edge of Google's network in their [Points of presence (PoPs)](https://cloud.google.com/about/locations#network-tab), Cloud Armour security policies apply at the edge for external load balancers:
@@ -1337,19 +1356,53 @@ You require either the `roles/compute.securityAdmin` or `roles/compute.networkAd
   - Access the following APIs:
     - BackendServices setSecurityPolicy, list (gcloud only)
 
+![Cloud Armour Sec Policies](images/Cloud_Armour_Policies.png)
+
+The default rule is automatically assigned a priority of 2147483647 (INT-MAX) and it is always present in the Google Cloud Armor security policy. This rule CANNOT be deleted.
+
 **Create the Cloud Armour Security policies**
+
+Creating a Cloud Armour security Policy:
+
 ```
-gcloud compute security-policies create mobile-clients-policy \
-    --description "policy for external users"
+gcloud compute security-policies create [POLICY_NAME] --description [DESCRITPION]"
 ```
 
-Update the default rules to deny traffic:
+Update default rules to deny traffic:
 
 ```
 gcloud compute security-policies rules update 2147483647 \
-    --security-policy mobile-clients-policy \
-    --action "deny-404"
+    --security-policy [POLICY_NAME] \
+    --action "deny-404"|"deny-403"|"deny-502"
 ```
+
+Add rules for specifiy valid IPv4/v6 CIDR IP ranges:
+
+```
+gcloud compute security-policies rules create 1000 \
+    --security-policy [POLICY_NAME] \
+    --description "allow traffic from 192.0.2.0/24" \
+    --src-ip-ranges "192.0.2.0/24" \
+    --action "allow"
+```
+
+Create a policy leveraging the advanced expression:
+
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "inIpRange(origin.ip, '1.2.3.4/32') && has(request.headers['user-agent']) && request.headers['user-agent'].contains('Godzilla')" \
+   --action allow \
+   --description "Block User-Agent 'Godzilla'"
+```
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "origin.region_code == 'AU'" \
+   --action "deny-403" \
+   --description "AU block"
+```
+
 
 You can use the `--enable-layer7-ddos-defense` flag to enable [Adpative Protection](https://cloud.google.com/armor/docs/adaptive-protection-overview)
 
@@ -1385,6 +1438,32 @@ spec:
     name: "example-security-policy"
 ```
 
+**Pre-Configured Rules**
+You can also use the preconfigured rules that exist:
+
+To view the pre-configured rules list :
+
+`gcloud compute security-policies list-preconfigured-expression-sets`
+
+Result:
+```
+    EXPRESSION_SET
+sqli-canary
+    RULE_ID
+    owasp-crs-v030001-id942110-sqli
+    owasp-crs-v030001-id942120-sqli
+    …
+xss-canary
+    RULE_ID
+    owasp-crs-v030001-id941110-xss
+    owasp-crs-v030001-id941120-xss
+…
+sourceiplist-fastly
+sourceiplist-cloudflare
+sourceiplist-imperva
+```
+
+The output will display the list of rules that can be found [here](https://cloud.google.com/armor/docs/rule-tuning#preconfigured_rules).
 
 ### Rules language
 Cloud Armour custom rules language is an extension of the [Common Expression Language (CEL)](https://github.com/google/cel-spec) and is used to write expressions for advanced matching conditions for security policy rules.
@@ -1394,6 +1473,35 @@ An expression requires two components:
   * _Operations_ that can be performed on the attributes as part of an expression.
 
 The following example creates a rate-based ban rule at priority 100 for each IP address whose requests match a header `fist` with value `tuna` and ban it for 300 seconds when its rate exceeds a limit of 50 requests for each 120 seconds. Banned requests return an error code of `404`.
+
+
+**Tuning WAF Rules**
+
+Each preconfigured rule consists of multiple signatures. Incoming requests are evaluated against the preconfigured rules. A request matches a preconfigured rule if the request matches any of the signatures that are associated with the preconfigured rule. A match is made when the `evaluatePreconfiguredExpr()` command returns the value `true`.
+
+If you decide that a preconfigured rule matches more traffic than is necessary or if the rule is blocking traffic that needs to be allowed, the rule can be tuned to disable noisy or otherwise unnecessary signatures. To disable signatures in a particular preconfigured rule, you provide a list of IDs of the unwanted signatures to the `evaluatePreconfiguredExpr()` command. The following example excludes two CRS rule IDs from the preconfigured `xss-stable` WAF rule:
+
+```
+evaluatePreconfiguredExpr('xss-stable', ['owasp-crs-v020901-id981136-xss', 'owasp-crs-v020901-id981138-xss'])
+```
+
+The following command adds a rule that uses a pre-configured expression set to mitigate SQLi attacks:
+```
+gcloud compute security-policies rules create 1000 \
+   --security-policy my-policy \
+   --expression "evaluatePreconfiguredExpr('sqli-stable')" \
+   --action "deny-403"
+```
+
+Attach the policy to backend services
+```
+gcloud compute backend-services update [BACKEND_SERVICE_NAME] --security-policy [POLICY_NAME]
+```
+
+Two kinds of match conditions:
+* basic contains list of ips or ip ranges
+* advanced contains expressions written using an extension of the [Common Expression Language (CEL)](https://github.com/google/cel-spec)
+
 
 ```
 gcloud compute security-policies rules create 100 \
@@ -1460,6 +1568,60 @@ Other sec policy examples can be found [here](https://cloud.google.com/armor/doc
 |Adaptive Protection   | Alerting only   | Yes  |
 |DDoS response support   | N/A   | Yes (w/ Premium support)   |
 |DDoS bill protection   | N/A   | Yes   |
+
+
+### Distributed Denial of Service Attacks (DDoS) Mitigation
+
+A Denial of Service (DoS) attack is an attempt to render your service or application unavailable to your end users.
+
+With Distributed Denial of Service (DDoS) attacks, the attackers use multiple resources (often a large number of compromised hosts/instances) to orchestrate large scale attacks against targets.
+
+Mitigation Best Practices:
+* **Reduce the attack surface for GCE Deployment**:
+  * Provision with in isolated VPCs leveraging the best practices [here](https://cloud.google.com/docs/enterprise/best-practices-for-enterprise-organizations#define-your-network)
+  * Isolate and secure deployment using vpcs, subnets, firewall rule tag, IAMs
+  * Open access to only the ports and protocols you need and disable those that you dont using firewall rules and/or [protocol forwarding](https://cloud.google.com/compute/docs/protocol-forwarding/)
+* **Isolate you internal traffice from the external world**
+  * Deploy instances without public IPs unless necessary
+  * set a NAT gateway or SSH Bastion host to limit the number of instances that are exposed to the internet
+  * Deploy internal Load Balancers for internal clietn instances accessing internally deployed services
+* **DDoS Proectection By Enabling Proxy-based Load Balancing**
+  * SSL Proxy Or HTTP(s) Load Balancing mitigates and absorbs many Layer 4 and below attacks, such as SYN floods, IP fragment floods, ports exhaustion, etc
+* **Scale to absorbe the attack**
+  * With Google Cloud Global Load Balancing, the frontend infrastructure which terminates user traffic, automatically scales to absorb certain types of attacks (e.g., SYN floods) before they reach your compute instances.
+  * _Anycast-based Load Balancing_:
+    * HTTP(S) and SSL Proxy enable a single anycast IP to front-end you deployed instances in all regions to increase the surface area to absorb any attacks.
+    * _Autoscaling_:
+      * Provision sufficient number of instances and/or configure autoscaling to handle traffic spikes.
+* **Protection with CDN Offloading**:
+  * Google Cloud CDN acts as a proxy between your clients and your origin servers. For cacheable content, Cloud CDN caches and services this content from points-of-presence (POPs) closer to your users as opposed to sending them to backend servers (instances). In the event of DDoS attack for cacheable content, the requests are sent to POPs all over the globe as opposed to your origin servers, thereby providing a larger set of locations to absorb the attack.
+  * If CDN interconnect is used, you can leverage additional DDoS protection provided by GCPs CDN Interconnect partners.
+* **Deploy third-party DDoS protection solutions**:
+  * DDoS protection solutions are offered by GCP partners such as CloudFlare, F5 Networks, Fortinet, etc.
+  * DDoS protection solutions are available via the [Google Cloud Marketplace](http://console.cloud.google.com/marketplace/browse?q=DDoS)
+  * GCP Cloud Armour offers DDoS Protection
+* **App Engine Deployment**:
+  * Designed to be a multi-tenant system and has safeguards to ensure a bad app will not impact performance or availability of other applications on the platform
+  * Sits behind Google Front-Ends which mitigate and absorbes DDoS attacks
+  * Use a [dos.yaml](https://cloud.google.com/appengine/docs/standard/python/config/dos) to block unwanted IPs/IP networks from access the app.
+* **Google Cloud Storage**:
+  * Used signed URLs
+* Use Identity Aware Proxy (IAP)
+* Use API Management (Cloud Endpoints, Apigee):
+  * Request Limits
+  * Control API Access
+  * Monitor API Usage
+
+### Labs
+
+[HTTP Loadbalancer with Cloud Armour](https://www.qwiklabs.com/focuses/1232?parent=catalog)
+
+**Using Cloud Armour with Serverless apps**
+
+Cloud Armour can be by-passed IF the user has the default URL for the Cloud Function. To mitigate this risk, us the `internal-and-gclb` when you configure Cloud Functions, which will allows only internal traffic and traffic sent to a public IP address exposed by the external HTTP(s) LB. Traffic sent to `cloudfunctions.net` or any custom domain setup through Cloud Functions is blocked.
+
+### Monitoring
+Cloud Armour logs are exported to Cloud Monitoring, which can be used to monitor and check whether policies are working as intended.
 
 
 </details>
@@ -1563,7 +1725,7 @@ The following is network traffic that is allways blocked by GCP and firewall rul
 |Blocked Traffic| Applies To|
 |---------------|-----------|
 | GRE Traffic| all sources, all destinations, including among instances using internal ip addresses, unless explicitly allowed through protocol forwarding|
-| Protocols othan than TCP, UDP, ICMP, and IPIP| Traffic between: * instances and the internet * instances if they are addressed with external IPs * instances if a load balancer with an external IP is involved |
+| Protocols other than than TCP, UDP, ICMP, and IPIP| Traffic between: * instances and the internet * instances if they are addressed with external IPs * instances if a load balancer with an external IP is involved |
 | Egress Traffic on TCP port 25 (SMTP) | Traffic From: * instances to the internet * instances to other instances addressed by external IPs |
 | Egress Traffic on TCP port 465 or 587 (SMTP over SSL/TLS) | Traffic from: * instances to the internet, except for traffic destined for known Google SMTP Servers * instances to other instances addressed by external IPs |
 
@@ -1576,6 +1738,29 @@ If you need strict control over how firewall rules are applied to VMs, use targe
 You cannot mix filtering by service account or network tags.
 
 [Configure VPC Firewall Lab](https://docs.google.com/document/d/1RWck9O9sJt6SqI1l8o9-aih2UPwLmp6dQQFbvoWmNwM/edit#heading=h.2g4x5d8r4egh)
+
+#### Hierarchial Firewall Rules/Policies
+
+Hierarchical firewall policies let you create and enforce a consistent firewall policy across your organization. You can assign hierarchical firewall policies to the organization as a whole or to individual folders. These policies contain rules that can explicitly deny or allow connections, as do Virtual Private Cloud (VPC) firewall rules. In addition, hierarchical firewall policy rules can delegate evaluation to lower-level policies or VPC network firewall rules with a goto_next action.
+
+Lower-level rules cannot override a rule from a higher place in the resource hierarchy. This lets organization-wide admins manage critical firewall rules in one place.
+
+**Specifications**
+
+* Hierarchical firewall policies are created at organization and folder nodes. Creating a policy does not automatically apply the rules to the node.
+* Policies, once created, can be applied to (associated with) any nodes in the organization.
+* Hierarchical firewall policies are containers for firewall rules. When you associate a policy with the organization or a folder, all rules are immediately applied. You can swap policies for a node, which atomically swaps all the firewall rules applied to virtual machine (VM) instances under that node.
+* Rule evaluation is hierarchical based on resource hierarchy. All rules associated with the organization node are evaluated, followed by those of the first level of folders, and so on.
+* Hierarchical firewall policy rules have a new goto_next action that you can use to delegate connection evaluation to lower levels of the hierarchy.
+* Hierarchical firewall policy rules can be targeted to specific VPC networks and VMs by using target resources for networks and target service accounts for VMs. This lets you create exceptions for groups of VMs. Hierarchical firewall policy rules do not support targeting by instance tags.
+* Each hierarchical firewall policy rule can include either IPv4 or IPv6 ranges, but not both.
+* To help with compliance and debugging, firewall rules applied to a VM instance can be audited by using the VPC network details page and the VM instance's network interface details page.
+
+By default, all hierarchical firewall policy rules apply to all VMs in all projects under the organization or folder where the policy is associated. However, you can restrict which VMs get a given rule by specifying target networks or target service accounts.
+
+![Hierarchial FW Policy](https://cloud.google.com/static/vpc/images/firewall-policies/hfw-1.svg)
+
+Hierarchical firewall policies containing rules (yellow boxes) are applied at the organization and folder levels. VPC firewall rules are applied at the VPC network level.
 
 ### VPC Peering
 Google Cloud VPC Network Peering allows internal IP address connectivity across two Virtual Private Cloud (VPC) networks regardless of whether they belong to the same project or the same organization.
@@ -1603,38 +1788,6 @@ Only directly peered networks can communicate. Transitive peering is not support
 At the time of peering, Google Cloud checks to see if there are any subnets with overlapping IP ranges between the two VPC networks or any of their peered networks. If there is an overlap, peering is not established. Since a full mesh connectivity is created between VM instances, subnets in the peered VPC networks can't have overlapping IP ranges as this would cause routing issues.
 
 ![network peering](images/network-peering-11.svg)
-
-### VPC Flow Logs
-VPC Flow Logs records network flows sent from or received by VM instances.
-VPC flow logs will only include traffic seen by a VM (e.g., if traffic was blocked by an egress rule, it will be seen but traffic blocked by an ingress rule, not reaching a VM, will not be seen.
-The traffic will include:
-* Network flows between VMs in the same VPC
-* Network flows between VMs in a VPC network and hosts in your on-premises network that are connected via VPN or Cloud Interconnect
-* Network flows between VMs and end locations on the Internet
-* Network flows between VMs and Google services in production Protocols: you can monitor network flows for TCP and UDP.
-
-These logs can be used to monitor network traffic to and from your VMs, forensics, real-time security analysis, and expense optimization.
-
-You can view flow logs in Stackdriver Logging, and you can export logs to any destination that Stackdriver Logging export supports (Cloud Pub/Sub, BigQuery, etc.).
-
-Flow logs are aggregated by connection, at a 5 second interval, from Compute engine instances and exported in real time. By subcribing to Cloud Pub/Sub, you can analyze flow logs using real-time streaming.
-
-VPC Flow Logs service is disabled by default on all VPC subnets. When enabled it applies to all VM instances in the subnet.
-
-Enabling VPC Flow Logs can be done via Console (at any time) using the CLI.
-
-```
-gcloud compute networks subnets create|update subnet-name \
-    --enable-flow-logs \
-    [--logging-aggregation-interval=aggregation-interval \
-    [--logging-flow-sampling=0.0...1.0] \
-    [--logging-filter-expr=expression] \
-    [--logging-metadata=(include-all | exclude-all | custom)] \
-    [--logging-metadata-fields=fields] \
-    [other flags as needed]
-```
-
-[VPC Flow Log Lab](https://www.qwiklabs.com/focuses/1236?parent=catalog)
 
 For more details on VPC Peering go [here](https://cloud.google.com/vpc/docs/vpc-peering)
 
@@ -1777,7 +1930,7 @@ Use App Engine firewalls see https://cloud.google.com/appengine/docs/legacy/stan
 <details>
 <summary> 2.3 Establishing private connectivity</summary>
 
-## 2.3.a - Designing and configuring private RFC1918 connectivity between VPC networks and Google Cloud Projects (Shared VPC, VPC perring)
+## 2.3.a - Designing and configuring private RFC1918 connectivity between VPC networks and Google Cloud Projects (Shared VPC, VPC peering)
 
 ## 2.3.b - Designing and configuring RFC1918 connectivity between data centers and VPC network (IPSec and Cloud Interconnect)
 
@@ -1789,11 +1942,11 @@ Traffic traveling between the two networks is encrypted by one VPN gateway, and 
 
 ![IPSec VPN](images/IPSec%20VPN.png)
 
-Offers an SLA of 99.9% service availability. Supports Static Routes or Dynamic Routes (with the use of a Cloud Router). Suppports IKEv1 and IKEv2 (Internet Key Exchange) using a shared secret (IKE preshared key).
+Offers an SLA of 99.9% service availability. Supports Static Routes or Dynamic Routes (with the use of a Cloud Router). Supports IKEv1 and IKEv2 (Internet Key Exchange) using a shared secret (IKE pre-shared key).
 
 Cloud VPN traffic will either traverse the public internet or can use a direct peering line to Google's Network (Cloud Interconnect).
 
-Each _Cloud VPN_ can support up to 3 Gbs when traffic is traversing a direct pering link, or 1.5 Gps when its traversing over the public internet.
+Each _Cloud VPN_ can support up to 3 GBs when traffic is traversing a direct peering link, or 1.5 Gps when its traversing over the public internet.
 
 **VPN with Static Routes**
 ![VPN Static Routes](images/VPN_Static_Routes.png)
@@ -1813,7 +1966,7 @@ Two types of configuration
     * Provides a 99.99% SLA when configured with two interfaces and two external IPs
 * Classic:
   * External IPs and forwarding rules must be created
-  * Static Routing (policy based, route based) or Dynamic Routing using BGP
+  * Static Routing (policy based, route based) or Dynamic Routing using Cloud Router with Border Gateway Protocol (BGP)
   * Provides a 99.99% SLA
 
 ### Cloud Interconnect
@@ -1974,7 +2127,3235 @@ gcloud compute routers nats create nat-config \
 
 </details>
 
+# Section 3 Ensuring data protection
+<details>
+<summary> 3.1 - Protecting sensitive data </summary>
 
+## 3.1.a - Inspecting and redacting personally identifiable information (PII)
+
+### Cloud Data Loss Prevention (DLP)
+With over [120 built-in infoTypes](https://cloud.google.com/dlp/docs/infotypes-reference), Cloud DLP gives you the power to scan, discover, classify, and report on data from virtually anywhere. Cloud DLP has native support for scanning and classifying sensitive data in Cloud Storage, BigQuery, and Datastore and a streaming content API to enable support for additional data sources, custom workloads, and applications.
+
+Cloud DLP using _information types - infoTypes_ to define what it scans. An `infoType` can be any type of sensitive data such as : age, email, credit card number.
+
+A list of _built-in infoTypes_ can be found [here](https://cloud.google.com/dlp/docs/infotypes-reference).
+
+Cloud DLP also allows you to define you own _custom infoType detector_ and will use this type to inspect and de-identify sensitive information that matches the pattern specified by this custom type.
+
+There are three types of custom infoType detectors:
+
+* _Regular custom dictionary detectors_:
+  * simple words or phrases that Cloud DLP uses to match on.
+  * use this type when you have a few hundred thousand words.
+* _Stored custom dictionary detectors_:
+  * generate by Cloud DLP from datasets stored in BigQuery or Cloud Storage.
+  * Upto ten million words/phrases
+* _Regular expressions(regex) detectors_:
+  * enables matching on regex expression pattern
+
+You can also _fine tune_ the scan results using _inspection rules_.
+
+* _Exclusion rules_:
+  * excluding false or unwanted findings
+* _Hotword rules_:
+  * increase the quantity or accuracy of findings returned by adding rules to a built-in or custom infoType detector.
+
+Likelihood is determined by the number of mathcing elements a result contains:
+
+* LIKELYHOOD_UNSPECIFIED
+* VERY_UNLIKELY
+* UNLIKELY
+* POSSIBLE
+* LIKELY
+* VERY_LIKELY
+
+**Custom infoType Example**
+
+```
+POST https://dlp.googleapis.com/v2/projects/[PROJECT_ID]/content:inspect?key={YOUR_API_KEY}
+
+{
+  "item":{
+    "value":"Patients MRN 444-5-22222"
+  },
+  "inspectConfig":{
+    "customInfoTypes":[
+      {
+        "infoType":{
+          "name":"C_MRN"
+        },
+        "regex":{
+          "pattern":"[1-9]{3}-[1-9]{1}-[1-9]{5}"
+        },
+        "likelihood":"POSSIBLE"
+      }
+    ]
+  }
+}
+```
+
+## De-Identification
+
+Process of removing identifying information from data. The DLP API detects sensitive data such as personally identifiable information (PII) and then uses a de-identification transformation to mask, delete, or otherwise obscure the data.
+
+The API uses the following methods for de-identification:
+
+* Date Shifting
+  - Randomly shift a set of dates but preserves the sequence and duration of a period of time
+  - Done in context to an individual or an entity
+  - Each individual's dates are shifted by and amount of time that is unique to that individual
+* Generalization and Bucketing
+  - Process of taking a distinguishing value and abstracting it into a more general, les distinguishing value
+  - Attempts to preserve data utility while also reducing the identifiability of the data
+  - DLP supports a generalization technique called _bucketing_
+  - Group records into smaller buckets
+
+## Authentication
+* API Key:
+  * Typically used when applications need Cloud DLP via REST API, which can be created via the [GCP Console](https://support.google.com/cloud/answer/6158862)
+  * The key is past to the REST API via the `key` parameter:
+    * `curl https://dlp.googleapis.com/v2/infoTypes?key=[YOUR_API_KEY]`
+* Tokens using Service Accounts:
+  * If the user is calling the API directly then `Bearer Token` should be used
+    * Bearer Token:
+      * Auth: `gcloud auth activate-service-account --key-file [KEY_FILE]`
+      * Get Token: `gcloud auth print-access-token`
+      * Use Token:
+        `curl -s -H 'Content-Type: application/json' -H 'Authorization: Bearer [ACCESS_TOKEN]' 'https://dlp.googleapis.com/v2/infoTypes'`
+  * If using the GCloud Client Libraries to call the Cloud DLP Api then `Application Default Credentials` SHOULD be used.
+    * `export GOOGLE_APPLICATION_CREDENTIALS=[PATH_TO_KEY_FILE]`
+
+## Content Related Mitigations
+Mitigating data misuse, privacy violations, and handling sensitive, restricted, or unacceptable content is accomplished by following a three step process.
+
+1. Classifying content
+   * Using Cloud Natural Language API
+     * classifies content into categories along with a confidence score
+2. Scanning and redacting content
+    * Scann all documents using Data Loss Prevention API for sensitive data before publication
+    * Redact any sensitive data
+3. Detecting unacceptable content
+   * Using Video Intelligence API for monitoring and scanning of videos
+   * Data Loss Prevention API can be used to detect sensitive data content before it is accidentially exposed to the public
+
+### Redaction
+Using the DLP REST api you can redact content based on configurations provided:
+
+**Inspect**:
+```
+curl -s \
+  -H "Authorization: Bearer [ACCESS_TOKEN]" -H "Content-Type: application/json" \
+  https://dlp.googleapis.com/v2/projects/$PROJECT_ID/content:inspect \
+  -d @[JSON_REQUEST]
+```
+This method will inspect the request json for any sensitive information based on the `infoTypes` provided in the `inspectConfig`.
+
+Sample Request:
+```
+{
+  "item":{
+    "value":"My phone number is (206) 555-0123."
+  },
+  "inspectConfig":{
+    "infoTypes":[
+      {
+        "name":"PHONE_NUMBER"
+      },
+      {
+        "name":"US_TOLLFREE_PHONE_NUMBER"
+      }
+    ],
+    "minLikelihood":"POSSIBLE",
+    "limits":{
+      "maxFindingsPerItem":0
+    },
+    "includeQuote":true
+  }
+}
+```
+
+Sample Response:
+
+The response will return details about any infoTypes found in the text with a `liklyhood` value, which a category of how likely the text matched, and `offset` information, which is the location of the data within the text.
+
+```
+{
+  "result": {
+    "findings": [
+      {
+        "quote": "(206) 555-0123",
+        "infoType": {
+          "name": "PHONE_NUMBER"
+        },
+        "likelihood": "LIKELY",
+        "location": {
+          "byteRange": {
+            "start": "19",
+            "end": "33"
+          },
+          "codepointRange": {
+            "start": "19",
+            "end": "33"
+          }
+        },
+        "createTime": "2018-07-03T02:20:26.043Z"
+      }
+    ]
+  }
+}
+```
+
+**DeIdentify**
+**_redactConfig_**
+This method will redact/remove the data in the request `item` the matches the provided `infoType` value in  the`inspectConfig`.
+
+```
+curl -s \
+  -H "Authorization: Bearer [ACCESS_TOKEN]" -H "Content-Type: application/json" \
+  https://dlp.googleapis.com/v2/projects/$PROJECT_ID/content:deidentify \
+  -d @[REQUEST]
+```
+
+Sample Request:
+```
+{
+  "item": {
+     "value":"My email is test@gmail.com",
+   },
+   "deidentifyConfig": {
+     "infoTypeTransformations":{
+          "transformations": [
+            {
+              "primitiveTransformation": {
+                "redactConfig": {
+
+                }
+              }
+            }
+          ]
+        }
+    },
+    "inspectConfig": {
+      "infoTypes": {
+        "name": "EMAIL_ADDRESS"
+      }
+    }
+}
+```
+Sample Response:
+
+```
+{
+  "item": {
+    "value": "My email is "
+  },
+  "overview": {
+    "transformedBytes": "14",
+    "transformationSummaries": [
+      {
+        "infoType": {
+          "name": "EMAIL_ADDRESS"
+        },
+        "transformation": {
+          "replaceWithInfoTypeConfig": {}
+        },
+        "results": [
+          {
+            "count": "1",
+            "code": "SUCCESS"
+          }
+        ],
+        "transformedBytes": "14"
+      }
+    ]
+  }
+}
+```
+
+**_replaceConfig_**
+The basic replacement transformation (ReplaceValueConfig in the DLP API) replaces detected sensitive data values with a value that you specify. For example, suppose you've told Cloud DLP to use "[fake@example.com]" to replace all detected EMAIL_ADDRESS infoTypes, and the following string is sent to Cloud DLP
+
+```
+POST https://dlp.googleapis.com/v2/projects/[PROJECT_ID]/content:deidentify?key={YOUR_API_KEY}
+
+{
+  "item":{
+    "value":"My name is Alicia Abernathy, and my email address is aabernathy@example.com."
+  },
+  "deidentifyConfig":{
+    "infoTypeTransformations":{
+      "transformations":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "primitiveTransformation":{
+            "replaceConfig":{
+              "newValue":{
+                "stringValue":"[email-address]"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig":{
+    "infoTypes":[
+      {
+        "name":"EMAIL_ADDRESS"
+      }
+    ]
+  }
+}
+```
+
+Sample Response:
+```
+{
+  "item":{
+    "value":"My name is Alicia Abernathy, and my email address is [email-address]."
+  },
+  "overview":{
+    "transformedBytes":"22",
+    "transformationSummaries":[
+      {
+        "infoType":{
+          "name":"EMAIL_ADDRESS"
+        },
+        "transformation":{
+          "replaceConfig":{
+            "newValue":{
+              "stringValue":"[email-address]"
+            }
+          }
+        },
+        "results":[
+          {
+            "count":"1",
+            "code":"SUCCESS"
+          }
+        ],
+        "transformedBytes":"22"
+      }
+    ]
+  }
+}
+```
+
+**_replaceWithInfoTypeConfig_**
+This transformation does the same thing as basic replacement, above, but it replaces the matched data with the value specified detected `infoType` value.
+
+Using `characterMaskConfig` you can partially or completely mask the result of the detective sensitive data by replacing the value with a fixed single character, such as (asterisk)`*` or (hash)`#`.
+
+Sample:
+
+```
+POST https://dlp.googleapis.com/v2/projects/[PROJECT_ID]/content:deidentify?key={YOUR_API_KEY}
+
+{
+  "item":{
+    "value":"My name is Alicia Abernathy, and my email address is aabernathy@example.com."
+  },
+  "deidentifyConfig":{
+    "infoTypeTransformations":{
+      "transformations":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "primitiveTransformation":{
+            "characterMaskConfig":{
+              "maskingCharacter":"#",
+              "reverseOrder":false,
+              "charactersToIgnore":[
+                {
+                  "charactersToSkip":".@"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig":{
+    "infoTypes":[
+      {
+        "name":"EMAIL_ADDRESS"
+      }
+    ]
+  }
+}
+```
+
+Sample Response:
+```
+{
+  "item":{
+    "value":"My name is Alicia Abernathy, and my email address is ##########@#######.###."
+  },
+  "overview":{
+    "transformedBytes":"22",
+    "transformationSummaries":[
+      {
+        "infoType":{
+          "name":"EMAIL_ADDRESS"
+        },
+        "transformation":{
+          "characterMaskConfig":{
+            "maskingCharacter":"#",
+            "charactersToIgnore":[
+              {
+                "charactersToSkip":".@"
+              }
+            ]
+          }
+        },
+        "results":[
+          {
+            "count":"1",
+            "code":"SUCCESS"
+          }
+        ],
+        "transformedBytes":"22"
+      }
+    ]
+  }
+}
+```
+
+DLP offers other forms of transformations that leverages encryption keys to encrypt any detected sensitive data, they are as follows:
+
+* [Cryptographic Hashing](https://cloud.google.com/dlp/docs/transformations-reference#crypto-hashing)
+  * Leverages SHA-256 based message authentication code on the input and replaces it with a hashed Base64 encode value.
+  * This process is a one way hash change
+* [Format Preserving encryption](https://cloud.google.com/dlp/docs/transformations-reference#fpe)
+  * Leverages the [format-preserving encryption](https://en.wikipedia.org/wiki/Format-preserving_encryption) with [FFX mode](http://www.connect-community.org/blog/2016/4/28/ffx-modes-of-the-aes-encryption-algorithm-specified-in-nists-sp-800-38g) enabled to generate a token value and replaces detective sensitive data in the input. The token is same length as in the input value and uses the same alphabet. By leverage the additional `surrogateInfoType` element the token can be _re-Identified_ using the original encryption key.
+* [Deterministic encryption](https://cloud.google.com/dlp/docs/transformations-reference#de)
+  * Leverages [AES in Synthetic Initialization Vector Mode (AES-SIV)](https://tools.ietf.org/html/rfc5297) to generate a token value and replaces detective sensitive data found in the input. By leverage the additional `surrogateInfoType` element the token can be _re-Identified_ using the original encryption key.
+
+Labs:
+
+[Data Loss Prevention - Quick Lab](https://google.qwiklabs.com/focuses/600?catalog_rank=%7B%22rank%22%3A3%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6768410)
+
+[Redacting Confidential Data within your pipelines in Cloud Data Fusion using Cloud DLP](https://www.qwiklabs.com/focuses/12373?catalog_rank=%7B%22rank%22%3A1%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6763461)
+
+**Inspection Rules**
+This helps refine the scan results that Cloud DLP returns by modifying the detection mechanism of a given infoType detector.
+
+If you want to exclude or include more values from the results that are returned by a built-in infoType detector, you can create a new custom infoType from scratch and define all the criteria that Cloud DLP should look for.
+
+There are two types of inspection rules:
+
+* _Exclusion rules_:
+  * help exclude false or unwanted findings
+* _Hotword rules_:
+  * help detect additional findings
+
+Samples:
+
+Exclusion Rules:
+```
+...
+    "inspectConfig":{
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "dictionary":{
+                  "wordList":{
+                    "words":[
+                      "example@example.com"
+                    ]
+                  }
+                },
+                "matchingType": "MATCHING_TYPE_FULL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+```
+
+Or using regex patterns
+
+```
+...
+    "inspectConfig":{
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "regex":{
+                  "pattern":".+@example.com"
+                },
+                "matchingType": "MATCHING_TYPE_FULL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+
+```
+
+You can also exclude specific infoTypes:
+
+```
+...
+    "inspectConfig":{
+      "infoTypes":[
+        {
+          "name":"DOMAIN_NAME"
+        },
+        {
+          "name":"EMAIL_ADDRESS"
+        }
+      ],
+      "customInfoTypes":[
+        {
+          "infoType":{
+            "name":"EMAIL_ADDRESS"
+          },
+          "exclusionType":"EXCLUSION_TYPE_EXCLUDE"
+        }
+      ],
+      "ruleSet":[
+        {
+          "infoTypes":[
+            {
+              "name":"DOMAIN_NAME"
+            }
+          ],
+          "rules":[
+            {
+              "exclusionRule":{
+                "excludeInfoTypes":{
+                  "infoTypes":[
+                    {
+                      "name":"EMAIL_ADDRESS"
+                    }
+                  ]
+                },
+                "matchingType": "MATCHING_TYPE_PARTIAL_MATCH"
+              }
+            }
+          ]
+        }
+      ]
+    }
+...
+```
+
+Hotword rules:
+
+* You want to change likelihood values assigned to scan matches based on the match's proximity to a hotword. For example, you want to set the likelihood value higher for matches on patient names depending on the names' proximity to the word "patient."
+
+```
+...
+  "inspectConfig":{
+    "ruleSet":[
+      {
+        "infoTypes":[
+          {
+            "name":"PERSON_NAME"
+          }
+        ],
+        "rules":[
+          {
+            "hotwordRule":{
+              "hotwordRegex":{
+                "pattern":"patient"
+              },
+              "proximity":{
+                "windowBefore":50
+              },
+              "likelihoodAdjustment":{
+                "fixedLikelihood":"VERY_LIKELY"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "minLikelihood":"VERY_LIKELY"
+  }
+...
+```
+
+## Storage Scans
+Cloud DLP supports scan data stored in Cloud Storage, Datastore and BigQuery.
+When scanning data in Cloud Storage it supports scanning: binary, text, image, Word, PDF, and Apache Avro files.
+
+Cloud DLP initiates a job that inspects the data at the give storage location.
+
+Best practices:
+* Choose data initially that poses the highest risk
+* Cloud DLP MUST be able to access the data, service accounts and vpc service controls!
+* Limit scope instead of all data. Use sampling and exclusion rules.
+* Avoid using all infoTypes if they are not needed
+* Schedule scans regularly. Scans will only inspect data since last scan
+
+Findings can be persisted to BigQuery for later analysis.
+
+Sample
+
+Scanning data in Cloud Storage:
+```
+POST https://dlp.googleapis.com/v2/projects/[PROJECT-ID]/dlpJobs?key={YOUR_API_KEY}
+
+{
+  "inspectJob":{
+    "storageConfig":{
+      "cloudStorageOptions":{
+        "fileSet":{
+          "url":"gs://[BUCKET-NAME]/*"
+        },
+        "bytesLimitPerFile":"200",
+        "fileTypes":[
+          "TEXT_FILE"
+        ],
+        "filesLimitPercent":90,
+        "sampleMethod": "RANDOM_START"
+      },
+      "timespanConfig":{
+        "startTime":"2017-11-13T12:34:29.965633345Z",
+        "endTime":"2018-01-05T04:45:04.240912125Z"
+      }
+    },
+    "inspectConfig":{
+      "infoTypes":[
+        {
+          "name":"PHONE_NUMBER"
+        }
+      ],
+      "excludeInfoTypes":false,
+      "includeQuote":true,
+      "minLikelihood":"LIKELY"
+    },
+    "actions":[
+      {
+        "saveFindings":{
+          "outputConfig":{
+            "table":{
+              "projectId":"[PROJECT-ID]",
+              "datasetId":"[DATASET-ID]"
+            },
+            "outputSchema":"BASIC_COLUMNS"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+For scanning Datastore use the `datastoreOptions` in the `storageConfig` element.
+
+```
+"inspectJob":{
+    "storageConfig":{
+      "datastoreOptions":{
+        "kind":{
+          "name":"Example-Kind"
+        },
+        "partitionId":{
+          "namespaceId":"[NAMESPACE-ID]",
+          "projectId":"[PROJECT-ID]"
+        }
+      }
+    },
+```
+
+For scanning BigQuery use the `bigQueryOptions`:
+
+```
+"storageConfig":{
+      "bigQueryOptions":{
+        "tableReference":{
+          "projectId":"[PROJECT-ID]",
+          "datasetId":"[BIGQUERY-DATASET-NAME]",
+          "tableId":"[BIGQUERY-TABLE-NAME]"
+        },
+        "rowsLimit": "1000",
+        "sampleMethod": "RANDOM_START",
+        "identifyingFields":[
+          {
+            "name":"person.contactinfo"
+          }
+        ]
+      },
+```
+
+
+## 3.1.b - Configuring pseudonymization
+
+Pseudonymization is a de-identification technique that replaces sensitive data values with cryptographically generated tokens. Pseudonymization is widely used in industries like finance and healthcare to help reduce the risk of data in use, narrow compliance scope, and minimize the exposure of sensitive data to systems while preserving data utility and accuracy.
+
+Pseudonymization techniques enable either one-way or two-way tokens. A one-way token has been transformed irreversibly, while a two-way token can be reversed. Because the token is created using symmetric encryption, the same cryptographic key that can generate new tokens can also reverse tokens. For situations in which you don't need reversibility, you can use one-way tokens that use secure hashing mechanisms.
+
+Cloud DLP supports three pseudonymization techniques for de-identification, and generates tokens by applying one of the three cryptographic transformation methods below to original sensitive data values:
+
+**Deterministic encryption using AES-SIV**
+An input value is replaced with a value that has been encrypted using the [AES-SIV](https://tools.ietf.org/html/rfc5297), Advanced Encryption Standard in Synthetic Initialization Vector mode, encryption algorithm with a cryptographic key, encoded using base64, and then prepended with a surrogate annotation, if specified. This method produces a hashed value, so it does not preserve the character set or the length of the input value. Encrypted, hashed values can be re-identified using the original cryptographic key and the entire output value, including surrogate annotation. Learn more about [the format of values tokenized using AES-SIV encryption](https://cloud.google.com/dlp/docs/pseudonymization#aes-siv).
+
+```
+{
+  "item": {
+    "value": "My name is Alicia Abernathy, and my email address is aabernathy@example.com."
+  },
+  "deidentifyConfig": {
+    "infoTypeTransformations": {
+      "transformations": [
+        {
+          "infoTypes": [
+            {
+              "name": "EMAIL_ADDRESS"
+            }
+          ],
+          "primitiveTransformation": {
+            "cryptoDeterministicConfig": {
+              "cryptoKey": {
+                "kmsWrapped": {
+                  "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                  "wrappedKey": "WRAPPED_KEY"
+                }
+              },
+              "surrogateInfoType": {
+                "name": "EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig": {
+    "infoTypes": [
+      {
+        "name": "EMAIL_ADDRESS"
+      }
+    ]
+  }
+}
+```
+
+Re-identify request:
+
+```
+{
+  "reidentifyConfig":{
+    "infoTypeTransformations":{
+      "transformations":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS_TOKEN"
+            }
+          ],
+          "primitiveTransformation":{
+            "cryptoDeterministicConfig":{
+              "cryptoKey":{
+              "kmsWrapped": {
+                "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                "wrappedKey": "WRAPPED_KEY"
+              }
+            },
+              "surrogateInfoType":{
+                "name":"EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig":{
+    "customInfoTypes":[
+      {
+        "infoType":{
+          "name":"EMAIL_ADDRESS_TOKEN"
+        },
+        "surrogateType":{
+
+        }
+      }
+    ]
+  },
+  "item":{
+    "value": "My name is Alicia Abernathy, and my email address is TOKEN."
+  }
+}
+```
+
+[Demo](https://cloud.google.com/dlp/docs/inspect-sensitive-text-de-identify)
+**Format preserving encryption**
+An input value is replaced with a value that has been encrypted using the [FPE-FFX](https://en.wikipedia.org/wiki/Format-preserving_encryption) encryption algorithm with a cryptographic key, and then prepended with a surrogate annotation, if specified. By design, both the character set and the length of the input value are preserved in the output value. Encrypted values can be re-identified using the original cryptographic key and the entire output value, including surrogate annotation. (For some important considerations around using this encryption method, see [Format preserving encryption](https://cloud.google.com/dlp/docs/pseudonymization#fpe-ffx))
+
+```
+{
+  "item": {
+    "value": "My name is Alicia Abernathy, and my email address is aabernathy@example.com."
+  },
+  "deidentifyConfig": {
+    "infoTypeTransformations": {
+      "transformations": [
+        {
+          "infoTypes": [
+            {
+              "name": "EMAIL_ADDRESS"
+            }
+          ],
+          "primitiveTransformation": {
+            "crypto_replace_ffx_fpe_config": {
+              "cryptoKey": {
+                "kmsWrapped": {
+                  "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                  "wrappedKey": "WRAPPED_KEY"
+                }
+              },
+              "surrogateInfoType": {
+                "name": "EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig": {
+    "infoTypes": [
+      {
+        "name": "EMAIL_ADDRESS"
+      }
+    ]
+  }
+}
+```
+Re-identify request:
+
+```
+{
+  "reidentifyConfig":{
+    "infoTypeTransformations":{
+      "transformations":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS_TOKEN"
+            }
+          ],
+          "primitiveTransformation":{
+            "crypto_replace_ffx_fpe_config":{
+              "cryptoKey":{
+              "kmsWrapped": {
+                "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                "wrappedKey": "WRAPPED_KEY"
+              }
+            },
+              "surrogateInfoType":{
+                "name":"EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig":{
+    "customInfoTypes":[
+      {
+        "infoType":{
+          "name":"EMAIL_ADDRESS_TOKEN"
+        },
+        "surrogateType":{
+
+        }
+      }
+    ]
+  },
+  "item":{
+    "value": "My name is Alicia Abernathy, and my email address is TOKEN."
+  }
+}
+```
+
+**Cryptographic hashing**
+An input value is replaced with a value that has been encrypted and hashed using [Hash-based Message Authentication Code (HMAC)-Secure Hash Algorithm (SHA)-256](https://tools.ietf.org/html/rfc4634) on the input value with a cryptographic key. The hashed output of the transformation is always the same length and can't be re-identified. Learn more about [the format of values tokenized using cryptographic hashing](https://cloud.google.com/dlp/docs/pseudonymization#cryptographic-hashing).
+
+
+## 3.1.c - Configuring format-preserving substitution
+
+**Format preserving encryption**
+An input value is replaced with a value that has been encrypted using the [FPE-FFX](https://en.wikipedia.org/wiki/Format-preserving_encryption) encryption algorithm with a cryptographic key, and then prepended with a surrogate annotation, if specified. By design, both the character set and the length of the input value are preserved in the output value. Encrypted values can be re-identified using the original cryptographic key and the entire output value, including surrogate annotation. (For some important considerations around using this encryption method, see [Format preserving encryption](https://cloud.google.com/dlp/docs/pseudonymization#fpe-ffx))
+
+```
+{
+  "item": {
+    "value": "My name is Alicia Abernathy, and my email address is aabernathy@example.com."
+  },
+  "deidentifyConfig": {
+    "infoTypeTransformations": {
+      "transformations": [
+        {
+          "infoTypes": [
+            {
+              "name": "EMAIL_ADDRESS"
+            }
+          ],
+          "primitiveTransformation": {
+            "crypto_replace_ffx_fpe_config": {
+              "cryptoKey": {
+                "kmsWrapped": {
+                  "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                  "wrappedKey": "WRAPPED_KEY"
+                }
+              },
+              "surrogateInfoType": {
+                "name": "EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig": {
+    "infoTypes": [
+      {
+        "name": "EMAIL_ADDRESS"
+      }
+    ]
+  }
+}
+```
+Re-identify request:
+
+```
+{
+  "reidentifyConfig":{
+    "infoTypeTransformations":{
+      "transformations":[
+        {
+          "infoTypes":[
+            {
+              "name":"EMAIL_ADDRESS_TOKEN"
+            }
+          ],
+          "primitiveTransformation":{
+            "crypto_replace_ffx_fpe_config":{
+              "cryptoKey":{
+              "kmsWrapped": {
+                "cryptoKeyName": "projects/PROJECT_ID/locations/global/keyRings/dlp-keyring/cryptoKeys/dlp-key",
+                "wrappedKey": "WRAPPED_KEY"
+              }
+            },
+              "surrogateInfoType":{
+                "name":"EMAIL_ADDRESS_TOKEN"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "inspectConfig":{
+    "customInfoTypes":[
+      {
+        "infoType":{
+          "name":"EMAIL_ADDRESS_TOKEN"
+        },
+        "surrogateType":{
+
+        }
+      }
+    ]
+  },
+  "item":{
+    "value": "My name is Alicia Abernathy, and my email address is TOKEN."
+  }
+}
+```
+
+## 3.1.d - Restricting access to BigQuery datasets
+
+### BigQuery Security
+IAM Roles:
+  * BigQuery Admin (`bigquery.admin`):
+    * Create and read data
+    * run jobs
+    * set iam policies
+  * BigQuery Data Owner (`bigquery.dataOwner`):
+    * R/W access to data (tables and views)
+    * can grant access to other users and groups by setting IAM policies
+  * BigQuery Data Editor (`bigquer.dataEditor`):
+    * R/W access to data
+  * BigQuery Data Viewer (`bigquery.dataViewer`):
+    * Read-only access to data
+  * BigQuery Filtered Data Viewer (`bigquery.filteredDataViewer`):
+    * Read-only access to filtered table data defined by a row access policy
+  * BigQuery Job User (`bigquery.jobUser`):
+    * Create and run jobs
+    * no data access
+  * BigQuery Metadata Viewer (`bigquery.metadataViewer`):
+    * If applied to table or view allows reading metadata from a table or view
+    * If applied to a dataset provides permissions to list tables and views in the dataset, read the metadata from the dataset's tables/views
+    * If applied at the project or org level, follows same as applied to a dataset permissions but applies to all datasets in the project or org.
+  * BigQuery User (`bigquery.user`):
+    * Can run jobs
+    * Create datasets
+    * List tables
+    * save queries
+    * NO default access to data
+
+A full list of predefined IAM roles can be found [here](https://cloud.google.com/bigquery/docs/access-control#bigquery).
+
+The user who created the dataset is the owner.
+
+Always best to assigned roles to groups.
+
+BigQuery only supports _Customer-Managed Encryption Keys_(CMEK) for user controlled encryption
+
+#### Dataset level Permissions
+
+You can apply access controls during dataset creation by calling the `datasets.insert` API method.
+
+Access controls can't be applied during dataset creation in the Google Cloud console, the `bq` command-line tool, or data definition language (DDL) statements.
+
+You can apply access controls to a dataset after it is created in the following ways:
+
+* Using the Google Cloud console.
+* Using the GRANT and REVOKE DCL statements.
+* Using the bq update command in the bq command-line tool.
+* Calling the datasets.patch API method.
+* Using the client libraries.
+
+BQ SQL GRANT Command:
+
+```
+GRANT `roles/bigquery.dataViewer`
+ON SCHEMA mydataset
+TO 'user:joe@example.com';
+```
+
+BQ SQL Revoke Command:
+```
+REVOKE `roles/bigquery.dataViewer`
+ON SCHEMA mydataset
+FROM 'user:joe@example.com';
+```
+
+bq update command:
+
+```
+File containing access permissions (access.json)
+{
+ "access": [
+  {
+   "role": "READER",
+   "specialGroup": "projectReaders"
+  },
+  {
+   "role": "WRITER",
+   "specialGroup": "projectWriters"
+  },
+  {
+   "role": "OWNER",
+   "specialGroup": "projectOwners"
+  },
+  {
+   "role": "READER",
+   "specialGroup": "allAuthenticatedUsers"
+  },
+  {
+   "role": "READER",
+   "domain": "domain_name"
+  },
+  {
+   "role": "WRITER",
+   "userByEmail": "user_email"
+  },
+  {
+   "role": "WRITER",
+   "userByEmail": "service_account_email"
+  },
+  {
+   "role": "READER",
+   "groupByEmail": "group_email"
+  }
+ ],
+ ...
+}
+
+$ bq update \
+--source path_to_file \
+project_id:dataset
+```
+#### Table or View Level Access
+
+You can set or update the access policy on a bq resources using the following:
+
+* `bq set-iam-policy`
+* `bq add-iam-policy-binding`
+* `bq remove-iam-policy-binding`
+* Using the Google console
+* Calling `tables.setIamPolicy` API method
+* Using `GRANT`, `REVOKE` BQ SQL statements
+
+
+#### Authorized Views
+Views to provide row or column level permissions to datasets.
+
+To create `authorized views`, create a second dataset with different permissions from the frst. Add a view to the second dataset that selects the subset of data you want to expose from the first dataset.
+
+Access control examples can be found [here](https://cloud.google.com/bigquery/docs/access-control-examples).
+
+#### Optimizing Storage
+You can control storage costs and optimize storage usage by setting the default table expiration for newly created tables in a dataset. If you set the property when the dataset is created, any table created in the dataset is deleted after the expiration period. If you set the property after the dataset is created, only new tables are deleted after the expiration period.
+
+```
+bq mk \
+--time_partitioning_type=DAY \
+--time_partitioning_expiration=259200 \
+project_id:dataset.table
+```
+
+BigQuery Command Line Reference can be found [here](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference).
+
+## 3.1.e - Configuring VPC Service Controls
+
+See networking sections...
+
+## 3.1.f - Securing secrets with Secret Manager
+
+### Secrets Management
+GCP offers `Secret Manager` storage, management and access of secrets as binary blobs or text strings.
+
+Secret Manager works well for storing configuration information such as database passwords, API keys, or TLS certificates needed by an application at runtime.
+
+There are other third-party tools such as [Hashicorp Vault](https://www.vaultproject.io/) and [Berglas](https://github.com/GoogleCloudPlatform/berglas).
+
+**Secrets Manager** encrypts secret data before ts persisted to disk using AES-256 encryption scheme
+
+**IAM Roles**
+The following roles a needed in order to manage secrets:
+
+![Secret Manager IAM](images/secretmanager_iams.png)
+
+You can also you the Ch gsutil command to grant/update IAM policies:
+
+```
+gsutil iam ch user:john.doe@example.com:objectCreator gs://ex-bucket
+```
+
+Make a bucket publicly readable:
+
+```
+gsutil iam ch allUsers:objectViewer gs://ex-bucket
+```
+
+Or use the gsutil acl ch command to update ACLs
+
+Grants everyone read access:
+```
+gsutil acl ch -u AllUsers:R gs://example-bucket/example-object
+```
+
+Individual user:
+```
+gsutil acl ch -u john.doe@example.com:WRITE gs://example-bucket
+```
+
+### Secret Rotation
+Secrets can be rotated by adding a new secret version to the secret. Any version of a secret can be accessed as long as it is enabled.
+
+To prevent a secret from being used you should disable it.
+
+A secret can be in one of the following states:
+
+  * Enabled
+    * active and accessible
+  * Disabled
+    * cannot be accessed but content still exists
+    * Can be re-enabled
+  * Destroyed
+    * permanent
+    * content is discarded
+    * cannot be changed to another state
+
+```
+gcloud secrets versions enable | disable | destroy version-id --secret="secret-id"
+```
+
+### Replication
+Secrets have global names and globally replicated metadata, but the location where the secret payload data is stored can be controlled using the replication policy. Each secret has its own replication policy which is set at creation. The locations in the replication policy cannot be updated.
+
+There are two replication types:
+
+  * `Automatic`:
+    * simplest configuration and recommended for most users
+    * default policy
+    * secret with automaticate policy can only be created if the the resource creation in `global` is allowed.
+    * payload data is replicated without restriction.
+  * `User Managed`:
+    * payload data replicated to a user configured set of locations.
+    * Supported Locations found [here](https://cloud.google.com/secret-manager/docs/locations).
+    * a secret with a user managed replication policy can only be created if resource creation is allowed in the all selected locations.
+
+
+## 3.1.g - Protecting and managing compute instance metadata
+
+</details>
+
+<details>
+<summary> 3.2 - Managing encryption at rest </summary>
+
+## 3.2.a - Understanding use cases for Google default encryption, customer-managed encryption keys (CMEK), customer-supplied encryption keys (CSEK), Cloud External Key Manager (EKM), and Cloud HSM
+
+
+Google Cloud Platform encrypts customer data stored at rest by default, with no additional action required from you. Data in Google Cloud Platform is broken into subfile chunks for storage, and each chunk is encrypted at the storage level with an individual encryption key. Google uses a common encryption library, [Keyczar](https://github.com/google/keyczar), to implement encryption across almost all GCP Platform products.
+
+### Envelope Encryption
+By default, at the storage layer, Google uses _Envelope Encryption_, with its internal kms service as a central keystore.
+
+![Envelope Encryption](images/envelope_encryption_store.svg)
+
+To encrypt data using envelope encryption:
+
+* Generate a DEK locally.
+  * You could do this with an open source library such as OpenSSL, specifying a cipher type and a password from which to generate the key. You can also specify a salt and digest to use, if desired.
+
+* Use this DEK locally to encrypt your data.
+  * As an example, you could use OpenSSL as shown in the encrypting the message example. For best practice, use 256-bit Advanced Encryption Standard (AES-256) cipher in Galois Counter Mode (GCM).
+
+* Generate a new key in Cloud KMS, or use an existing key, which will act as the KEK. Use this key to encrypt (wrap) the DEK.
+
+* Store the encrypted data and the wrapped DEK.
+
+### Encryption at Rest
+By default GCP encrypts all customers data stored at rest using the Advanced Encryption Standard (AES) algorithm using a unique data encryption key (DEK).
+
+DEKs are encrypted with ("wrapped" by) key encryption keys (KEKs) and stored with the data.
+
+![DEKs](images/deks.png)
+
+By default, KEKs are stored using Cloud KMS and are fully managed by Google. Decrypting the data requires the unwrapped data encryption key (DEK) for the data chunk.
+
+![KEKs](images/keks.png)
+
+All data stored at the storage level is encrypted with AES256 by default.
+
+Decrypting data requires the unwrapped data encryption key
+(DEK) for the data chunk.
+
+![Decryption](images/decrypting.png)
+
+KEK rotation varies by service, the standard rotation period is 90 days.
+
+RE-encryption of data is required at least once every 5 years. Best practice is more frequent re-encryption.
+
+Google persists/stores up to 20 verisons of encrypted data.
+
+### Layers of Encryption
+Google uses several layers of encryption to protect customers data.
+
+![Encryption Layers](images/encryption_layers.png)
+
+For more details on GCP Encryption at Rest see the [whitepaper](https://cloud.google.com/security/encryption-at-rest/default-encryption#granularity_of_encryption_in_each_google_cloud_platform_product).
+
+### Encryption in Transit
+This type of encryption protects your data if communications are intercepted while data moves between your site and the cloud provider or between two services. This protection is achieved by encrypting the data before transmission; authenticating the endpoints; and decrypting and verifying the data on arrival. For example, Transport Layer Security (TLS) is often used to encrypt data in transit for transport security, and Secure/Multipurpose Internet Mail Extensions (S/MIME) is used often for email message security.
+
+Google Cloud services accept requests from around the world using a globally distributed system called the Google Front End (GFE). GFE terminates traffic for incoming HTTP(S), TCP and TLS proxy traffic, provides DDoS attack countermeasures, and routes and load balances traffic to the Google Cloud services themselves.
+
+GFEs proxy traffic to Google Cloud services. GFEs route the user's request over our network backbone to a Google Cloud service. This connection is authenticated and encrypted from GFE to the front-end of the Google Cloud service or customer application, when those communications leave a physical boundary controlled by Google or on behalf of Google.
+
+TLS in the GFE is implemented with BoringSSL, which is a Google-maintained open-source implementation of TLS protocoal, that is mostly interface-compatible with OpenSSL. Table 1 shows the encryption protocols that GFE supports when communicating with clients.
+
+|Protocol| Authentication | Key exchange | Encryption | Hash Functions|
+|-------|---------------|-----------|--------|-----------|
+|TLS 1.3 | RSA 2048 | Curve25519 | AES-128-GCM| SHA384 |
+|TLS 1.2 | ECDSPA P-256 | P-256 (NIST secp256r1) |AES-256-GCM | SHA256 |
+|TLS 1.1 | | | AES-128-CBC |SHA1|
+|TLS 1.0 | | | AES-256-CBC | MD5 |
+|QUIC | | | ChaCha20-Poly1305 | |
+| | | |3DES | |
+
+For more details on how Encryption In Transit works at Google see the following [whitepaper](https://cloud.google.com/security/encryption-in-transit).
+
+### Cloud Storage Encyption
+Cloud Storage always encrypts the customers data on the server before it is written to disk. Cloud storage manages server-side encryption keys on the clients behalf. It leverages AES-256 encryption by default.
+
+Alternatively the client has the option of using their own encryption keys for encrypting their data in Cloud Storage.
+
+These are the following options:
+
+* _Server Side Encryption_:
+  * **Customer-supplied encryption keys (CSEK)**:
+    * client can create and manage their own encryption keys for server-side encryption, which act as and additional encryption layer on top of the standard Cloud Storag Encryption.
+    * these keys ARE NOT stored on Googles servers nor do they manage the keys
+    * Examples for creating and using CSEK's : https://cloud.google.com/storage/docs/encryption/using-customer-supplied-keys
+    * **Currently Cloud Storage Transfer Service, Cloud Dataflow and Cloud Dataproc DO NOT support objects encrypted with CSEKs.**
+    * You cannot use CSEKs on a storage bucket, only on individual objects.
+    * More details on CSEKs: https://cloud.google.com/storage/docs/encryption/customer-supplied-keys
+  * **Customer-managed encryption keys (CMEK)**:
+    * client can generate and manage the keys using Cloud Key Management Service (KMS).
+    * encryption and decryption is done using service accounts with IAM permissions:
+      * `roles/cloudkms.cryptoEncrypter`
+        * encrypting only
+      * `roles/cloudkms.cryptoEncrypterDecrypter`
+        * encrypt and decrypt
+      * `roles/cloudkms.publickeyviewer`
+        * verify data only
+      * `roles/cloudkms.signerVerifier`
+        * sign and verify data
+      * `roles/cloudkms.admin`
+        * manage a key
+    * For a full list of Cloud KMS Permission see here [https://cloud.google.com/kms/docs/reference/permissions-and-roles].
+* _Client-side encyption_:
+  * encyption occurs before data is sent to cloud storage. Once data is landed in on the server it is also encrypted server side.
+
+**NOTE: If CSEK or client-side encryption is use there is a caveat where if the keys are lost the data will no longer be readable.**
+
+### Cloud KMS
+Cloud Key Management Service allows you to create, import, and manage cryptographic keys and perform cryptographic operations in a single centralized cloud service. You can use these keys and perform these operations by using Cloud KMS directly, by using Cloud HSM or Cloud External Key Manager, or by using Customer-Managed Encryption Keys (CMEK) integrations within other Google Cloud services.
+
+Ensure the user that is calling the encrypt and decrypt methods has the `cloudkms.cryptoKeyVersions.useToEncrypt` and `cloudkms.cryptoKeyVersions.useToDecrypt` permissions on the key used to encrypt or decrypt.
+
+One way to permit a user to encrypt or decrypt is to add the user to the `roles/cloudkms.cryptoKeyEncrypter`, `roles/cloudkms.cryptoKeyDecrypter`, or `roles/cloudkms.cryptoKeyEncrypterDecrypter` IAM roles for that key. Please note that the `roles/cloudkms.admin` role does not provide these two permissions.
+
+**NOTE: CryptoKeys and KeyRings cannot be deleted in Cloud KMS!**
+
+### Command Line snippets
+
+To enable Cloud KMS:
+```
+gcloud services enable cloudkms.googleapis.com
+```
+Create a keyring and cryptokey:
+```
+gcloud kms keyrings create $KEYRING_NAME --location global
+```
+
+```
+gcloud kms keys create $CRYPTOKEY_NAME --location global \
+      --keyring $KEYRING_NAME \
+      --purpose encryption
+```
+
+Using the encryption endpoint you can send the base64-encoded text you want to encrypt to the specified key:
+
+```
+curl -v "https://cloudkms.googleapis.com/v1/projects/$DEVSHELL_PROJECT_ID/locations/global/keyRings/$KEYRING_NAME/cryptoKeys/$CRYPTOKEY_NAME:encrypt" \
+  -d "{\"plaintext\":\"$PLAINTEXT\"}" \
+  -H "Authorization:Bearer $(gcloud auth application-default print-access-token)"\
+  -H "Content-Type: application/json"
+```
+
+To save the encrypted data to a file use the following curl:
+
+```
+curl -v "https://cloudkms.googleapis.com/v1/projects/$DEVSHELL_PROJECT_ID/locations/global/keyRings/$KEYRING_NAME/cryptoKeys/$CRYPTOKEY_NAME:encrypt" \
+  -d "{\"plaintext\":\"$PLAINTEXT\"}" \
+  -H "Authorization:Bearer $(gcloud auth application-default print-access-token)"\
+  -H "Content-Type:application/json" \
+| jq .ciphertext -r > 1.encrypted
+```
+
+The command line tool [jq](https://stedolan.github.io/jq/) will parse out the `ciphertext` property form the response and save to a file.
+
+To verify the data you can call the `decrypt` endpoint:
+
+```
+curl -v "https://cloudkms.googleapis.com/v1/projects/$DEVSHELL_PROJECT_ID/locations/global/keyRings/$KEYRING_NAME/cryptoKeys/$CRYPTOKEY_NAME:decrypt" \
+  -d "{\"ciphertext\":\"$(cat 1.encrypted)\"}" \
+  -H "Authorization:Bearer $(gcloud auth application-default print-access-token)"\
+  -H "Content-Type:application/json" \
+| jq .plaintext -r | base64 -d
+```
+Granting permissions to the keyring:
+
+```
+gcloud kms keyrings add-iam-policy-binding [KEYRING_NAME] \
+    --location [LOCATION] \
+    --member user:[USER_EMAIL] \
+    --role [CLOUD_KMS_ROLE]
+```
+For the user managing Cloud KMS, that is, a member of an organization's IT security team: The two roles with the minimum permissions required to manage Cloud KMS via the Cloud Console are the predefined Project Editor (editor) role, or a custom role based on the Cloud KMS Admin `cloudkms.admin` role combined with the following permissions:
+* `serviceusage.quotas.get`
+* `serviceusage.services.get`
+* `resourcemanager.projects.get`
+
+You can grant or restrict the ability to perform specific cryptographic operations, such as rotating a key or encrypting data. You can grant IAM roles on:
+
+* A key directly
+* A key ring, inherited by all keys in that key ring
+* A Google Cloud project, inherited by all keys in the project
+* A Google Cloud folder, inherited by all keys in all projects in the folder
+* A Google Cloud organization, inherited by all keys in folders in the
+
+
+Types of encryption keys:
+
+**Customer-managed encryption keys (CMEK)**
+Docs: https://cloud.google.com/kms/docs/cmek
+
+* Managed encryption keys using Cloud kms
+* Doesnt unnecessarily provdie more security over Google's default encryption mechanism
+* CMEK gives you more control over the lifecycle and management of your keys:
+  - You can control Google's ability to decrypt data at rest by disabling the keys used to protect that data.
+  - You can protect your data using a key that meets specific locality or residency requirements.
+  - You can automatically or manually rotate the keys used to protect your data.
+  - You can protect your data using a Cloud HSM key or a Cloud External Key Manager key, or an existing key that you import into Cloud KMS.
+
+Two org policies constraints to help ensure CMEK usage:
+
+* `constraints/gcp.restrictNonCmekServices` is used to require CMEK protection.
+* `constraints/gcp.restrictCmekCryptoKeyProjects` is used to limit which Cloud KMS keys are used for CMEK protection.
+  - Supported services:
+    - Artifact registry
+    - BigQuery
+    - Cloud Bigtable
+    - Cloud Composer
+    - Compute Engine
+    - GKE (Preview)
+    - Dataflow
+    - Cloud logging
+    - Pub/Sub
+    - Cloud Spanner
+    - Cloud SQL
+    - Cloud Storage
+
+
+**Customer-supplied encryption keys (CSEK)**
+Docs: https://cloud.google.com/docs/security/encryption/customer-supplied-encryption-keys
+
+Customer-Supplied Encryption Keys (CSEK) are a feature in Google Cloud Storage and Google Compute Engine. If you supply your own encryption keys, Google uses your key to protect the Google-generated keys used to encrypt and decrypt your data.
+
+Using CSEK in GCS (https://cloud.google.com/docs/security/encryption/customer-supplied-encryption-keys#cloud_storage):
+![CSEK-GCS](https://cloud.google.com/static/docs/security/encryption/customer-supplied-encryption-keys/Diagram1.png)
+
+* Add `encryption_key` and `decryption_key1` flag to you [boto configuration file](https://cloud.google.com/storage/docs/boto-gsutil) or pass it during execution of `gsutil` command `$ gsutil -o "GSUtil:decryption_key1=ENCRYPTION_KEY_FILE" cp...` or `$ gsutil -o "GSUtil:ecnryption_key=ENCRYPTION_KEY_FILE" cp...`
+
+Using CSEK in GCE (https://cloud.google.com/docs/security/encryption/customer-supplied-encryption-keys#compute_engine):
+![CSEK-GCE](https://cloud.google.com/static/docs/security/encryption/customer-supplied-encryption-keys/Diagram2.png)
+
+
+**Cloud External Key Manager (EKM)**
+Docs: https://cloud.google.com/kms/docs/ekm
+
+Use when you have keys that you manage with [supported external key management partner](https://cloud.google.com/kms/docs/ekm#supported_partners). Integrates with Cloud KMS
+
+![EKM](https://cloud.google.com/static/kms/images/cloud_ekm_encryption_diagram.svg)
+
+Considerations:
+* GCP has no control over availability of your externally-managed keys and cannot recover any keys
+* Communication to external service over the internet can lead to problems with reliability, availability, and latency. For applications with low tolerance for these types of risks, consider using Cloud HSM or Cloud KMS to store your key material.
+* Cloud EKM can be used with [Hosted Private HSM](https://cloud.google.com/kms/docs/hosted-private-hsm) to create a single-tenant HSM solution integrated with Cloud KMS. Choose a Cloud EKM partner that supports single-tenant HSMs and review the requirements at [Hosted Private HSM](https://cloud.google.com/kms/docs/hosted-private-hsm) to learn more.
+
+
+
+**Cloud HMS**
+Docs: https://cloud.google.com/kms/docs/hsm
+Cloud HSM is a cloud-hosted Hardware Security Module (HSM) service that allows you to host encryption keys and perform cryptographic operations in a cluster of [FIPS 140-2 Level 3](https://csrc.nist.gov/publications/detail/fips/140/2/final) certified HSMs. Google manages the HSM cluster for you, so you don't need to worry about clustering, scaling, or patching. Because Cloud HSM uses Cloud KMS as its front end, you can leverage all the conveniences and features that Cloud KMS provides.
+
+Creating a key in HMS:
+
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose "encryption" \
+    --protection-level "hsm"
+```
+
+# Labs
+[Getting Started With Cloud KMS](https://www.qwiklabs.com/focuses/1713?catalog_rank=%7B%22rank%22%3A1%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6747257)
+
+[Encrypting a disk with Customer-Supplied Encryption Keys](https://docs.google.com/document/d/1xJRrSmC2EtSif6xaL0QaBxQ5CU9uR1DK1OMzr5xZ6Dg/edit#)
+
+[Using Customer-Managed Encryption Keys with Cloud Storage and Cloud KMS](https://docs.google.com/document/d/1KvP7GjtqYVUKGgUs0QzO1jhf2MBlQ3GiA9_8NYSVMOs/edit#heading=h.t0mbi9us7mcl)
+
+[Using Customer-Supplied Encryption Keys with Cloud Storage](https://docs.google.com/document/d/14AV9IgJXW_HYuii6JUUU0Ob0VN3hNMfzpQsfiz9K5Is/edit)
+
+
+## 3.2.b - Creating and managing encryption keys for CMEK, CSEK, and EKM
+
+**CMEK**
+
+Symmetric key:
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose "encryption"
+```
+
+Asymmetric decryption key:
+
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose "asymmetric-encryption" \
+    --default-algorithm "rsa-decrypt-oaep-2048-sha256"
+```
+
+Asymmetric signing key:
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose "asymmetric-signing" \
+    --default-algorithm "rsa-sign-pkcs1-2048-sha256"
+```
+
+Set key rotation:
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose "encryption" \
+    --rotation-period rotation-period \
+    --next-rotation-time next-rotation-time
+```
+
+**EKM via VPC**
+
+Symmetric encyption key:
+
+```
+gcloud kms keys create KEY \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --purpose "encryption" \
+    --default-algorithm "external-symmetric-encryption" \
+    --protection-level "external-vpc" \
+    --skip-initial-version-creation \
+    --crypto-key-backend EKM_CONNECTION
+```
+
+Asymmetric signnig key:
+```
+gcloud kms keys create KEY \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --purpose asymmetric-signing \
+    --protection-level "external-vpc" \
+    --skip-initial-version-creation \
+    --default-algorithm ec-sign-p256-sha256
+    --crypto-key-backend EKM_CONNECTION
+```
+
+Key verison:
+```
+gcloud kms keys versions create \
+    --key KEY \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --ekm-connection-key-path EKM_CONNECTION_KEY_PATH
+    --primary
+```
+
+**EKM via internet**
+Symmetric encyption key:
+
+```
+gcloud kms keys create KEY_NAME \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --purpose encryption \
+    --default-algorithm external-symmetric-encryption \
+    --protection-level external \
+    --skip-initial-version-creation
+```
+
+Asymmetric signnig key:
+```
+gcloud kms keys create KEY \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --purpose asymmetric-signing \
+    --protection-level external \
+    --skip-initial-version-creation \
+    --default-algorithm ec-sign-p256-sha256
+```
+
+Key verison:
+```
+gcloud kms keys versions create \
+    --key KEY_NAME \
+    --keyring KEY_RING \
+    --location LOCATION \
+    --external-key-uri EXTERNAL_KEY_URI \
+    --primary
+```
+
+By default, key versions in Cloud KMS spend 24hrs in the Scheduled for destruction before they are destroyed. To create a custom deletion schedule, with the following caveats:
+
+* The duration is only configurable during key creation.
+* Once specified, the duration for the key cannot be changed.
+* The duration applies to all versions of the key created in the future.
+* The minimum duration is 24 hours for all keys, except for import-only keys which have a minimum duration of 0.
+* The maximum duration is 120 days.
+* The default duration is 24 hours.
+
+```
+gcloud kms keys create key \
+    --keyring key-ring \
+    --location location \
+    --purpose purpose \
+    --destroy-scheduled-duration duration
+```
+
+**EKM**
+
+Symmetric keys:
+```
+gcloud kms keys \
+ create KEY_NAME \
+ --keyring KEY_RING_NAME \
+ --location LOCATION \
+ --purpose encryption \
+ --protection-level external \
+ --skip-initial-version-creation \
+ --default-algorithm external-symmetric-encryption
+```
+
+Asymmetric Key:
+```
+gcloud kms keys \
+ create KEY_NAME \
+ --keyring KEY_RING_NAME \
+ --location LOCATION \
+ --purpose asymmetric-signing \
+ --protection-level external \
+ --skip-initial-version-creation \
+ --default-algorithm ec-sign-p256-sha256
+```
+
+Create new versions:
+```
+gcloud kms keys versions create \
+ --key KEY_NAME \
+ --keyring KEY_RING_NAME \
+ --location LOCATION \
+ --external-key-uri EXTERNAL_KEY_URI \
+ --primary
+```
+
+## 3.2.c - Applying Google's encryption approach to use cases
+
+## 3.2.d - Configuring object lifecycle policies for Cloud Storage
+
+Cloud Storage is a service for storing your objects in Google Cloud. An object is an immutable piece of data consisting of a file of any format. You store objects in containers called buckets. All buckets are associated with a project, and you can group your projects under an organization.
+
+You can enable versioning on the bucket to keep historical versions of all objects:
+
+```
+gsutil versioning set on | off gs:\\my-bucket
+```
+
+### Storage Types
+There are several tiers or storage classes offered by Cloud Storage:
+
+* STANDARD
+  * >99.99 % availability in multi-region and dual regions
+  * 99.99 % in regions
+  * No min storage duration
+  * Hot Frequent access data
+* NEARLINE
+  * 99.95 % in multi-regions and dual regions
+  * 99.9% in regions  
+  * min 30 days
+  * lower storage cost than standard
+  * higer cost for accessing
+  * for infrequently accessed data
+  * appropriate for backups
+* COLDLINE
+  * 99.95 % in multi-regions and dual regions
+  * 99.9% in regions
+  * min 90 days
+  * Coldline storage is ideal for data you plan to read or modify at most once a quarter. Note, however, that for data being kept entirely for backup or archiving purposes, Archive storage is more cost-effective, as it offers the lowest storage costs.
+* ARCHIVE
+  * 99.95 % in multi-regions and dual regions
+  * 99.9% in regions
+  * min 365 days
+  * high cost for accessing data
+  * lowest storage fees
+  * ideal for data that you will not touch for 1 year
+  * DR scenerios
+
+### Encrypting Data with gsutil
+
+```
+gsutil -o 'GSUtil:encryption_key=projects/PROJECT_ID/locations/LOCATION/keyRings/KEYRING/cryptoKeys/KEYNAME' \
+       cp /some/local/file gs://my-bucket/
+```
+
+### Enabling logging within a bucket
+ ```
+ gsutil mb gs://bucket-for-logs
+ gsutil acl ch -g [email_address]:W gs://bucket-for-logs
+ gsutil defacl set project-private gs://bucket-for-logs
+ gsutil logging set on -b gs://bucket-for-logs gs://[MAIN_BUCKET]
+ ```
+
+### Cloud Storage Permission and Access Control Lists (ACLs)
+* Members can be granted access to Cloud Storage at the org , folder, project or bucket levels.
+* Permissions flow down from higher levels.
+* Cannot remove a permission at the lower level that was granted at a higher level.
+
+#### Predefine storage roles
+Roles can be added to member and service accounts at the project or bucket level.
+![Predefined Storage Roles](images/predefine-storage-roles.png)
+
+#### Storage role permissions
+![Storage Role Permissions](images/storage_perms.png)
+
+* `Storage Object Admin`:
+  * provides full control of the Cloud Storage Objects.
+* `Storage Object Creator`:
+    * ability to get and list objects and projects and as well as create objects
+* `Storage Object Viewer`:
+  * ability to get and list objects get and list projects and list Cloud Storage objects
+
+### ACLs
+Access Control Lists (ACLs) allows you  to define who has access to individual buckets and objects, as well as what level of access they have.
+
+ACLs can work in tandem with IAM to grant access to buckets and objects. A user needs either an IAM or an ACL to access a bucket or object.
+
+In most cases IAM permissions should be used. If you want more finer grained access control over buckets and objects, then use ACLs.
+
+To make a bucket public, grant `allUsers` the `Storage Object Viewer` role. To make an object public, grant `allUsers` the `Reader` access.
+
+View current ACL:
+
+`gsutil defacl get gs://[BUCKET_NAME]`
+
+### Signed URLs
+Signed URLs allow access to Cloud Storage without having to add a user to and ACL or IAM. They provide temporary access with a timeout. Caveat is that anyone with the signe url has access to the bucket and/or object(s).
+
+**Creating a signed URL with gsutil**
+
+```
+glcoud iam service-accounts keys create ~/key.json --iam-account [EMAIL_ADDRESS]
+
+gsutil signurl -d 10m ~/key.json gs://[GCS_BUCKET_NAME]/[FILE]
+```
+
+`-d` is the duration the url with be available for (example 10 min)
+
+### Signed Policy Documents
+Provides control on what can be uploaded to a bucket. Allows control over size, content type and other upload characteristics.
+
+Example of Signed Policy Document:
+![Signed Policy Doc](images/signed_policy_documents.png).
+
+Requirements:
+* Ensure the policy document is UTF-8 encoded
+* Encode the policy document as a Base64 representation
+* Sign your policy using RSA SHA-256 using the secret key provide from GCP Console
+* Encode the message digest as a Base64 representation
+* Add the policy document information to the HTML form.
+
+### Cloud Storage Lifecyle Management
+You can configure a set of rules that will trigger actions to either delete the object perminently or move it to a lower cost storage tier (Nearline, Coldline or Archive).
+
+To enable Object Lifecycle Management via gsutil run :
+```
+gsutil lifecycle set [LIFECYCLE_CONFIG_FILE] gs://[BUCKET_NAME]
+```
+
+Sample Config File:
+```
+{
+"lifecycle": {
+  "rule": [
+  {
+    "action": {
+      "type": "SetStorageClass",
+      "storageClass": "NEARLINE"
+    },
+    "condition": {
+      "age": 365,
+      "matchesStorageClass": ["MULTI_REGIONAL", "STANDARD", "DURABLE_REDUCED_AVAILABILITY"]
+    }
+  },
+  {
+    "action": {
+      "type": "SetStorageClass",
+      "storageClass": "COLDLINE"
+    },
+    "condition": {
+      "age": 1095,
+      "matchesStorageClass": ["NEARLINE"]
+    }
+  }
+]
+}
+}
+```
+
+### Data Retention Policies using Bucket Lock
+You can include a retention policy when creating a new bucket, or you can add a retention policy to an existing bucket. Placing a retention policy on a bucket ensures that all current and future objects in the bucket cannot be deleted or overwritten until they reach the age defined by the policy.
+
+Rententions Periods:
+* A day is considered to be 86,400 seconds.
+* A month is considered to be 31 days, which is 2,678,400 seconds.
+* A year is considered to be 365.25 days, which is 31,557,600 seconds.
+
+You can set a maximum retention period of 3,155,760,000 seconds (100 years).
+
+**Locking a retention policy is irreversible**.
+
+Bucket Lock can help with regulatory and compliance requirements such as those associated with FINRA, SEC and CFTC.
+
+When a retention policy is locked, Cloud Storage automatically puts a `lien` on the to the `project.delete` permission where the bucket is contained. This means the the project cannot be deleted.
+
+
+To apply a retention policy using `gsutil`:
+
+```
+gsutil retention set 600s gs://my-bucket
+```
+The above command applies a retention policy of 10 min.
+
+To remove a retention policy:
+```
+gsutil retention clear gs://my-bucket
+```
+
+To lock a retention policy:
+```
+gsutil retention lock gs://my-bucket
+```
+
+
+## 3.2.e - Enable confidential computing
+
+Confidential Computing is the protection of data in-use with hardware-based Trusted Execution Environment (TEE). TEEs are secure and isolated environments that prevent unauthorized access or modification of applications and data while they are in use. This security standard is defined by the Confidential Computing Consortium.
+
+### End-to-end encryption
+End-to-end encryption is comprised of three states.
+
+* Encryption-at-rest protects your data while it is being stored.
+* Encryption-in-transit protects your data when it is moving between two points.
+* Encryption-in-use protects your data while it is being processed.
+
+Confidential Computing provides the last piece of end-to-end encryption: encryption-in-use.
+
+A Confidential VM is a type of Compute Engine virtual machine (VM) that enables enhanced performance and security for high-memory workloads using AMD Secure Encrypted Virtualization (SEV). Confidential VM includes inline memory encryption to secure processing of sensitive data in memory. Together with encryption at rest and encryption in transit, inline memory encryption allows you to keep your data and apps encrypted at all times. Learn more about [Confidential VM and Compute Engine](https://cloud.google.com/compute/confidential-vm/docs/about-cvm).
+
+**DOES NOT SUPPORT LIVE MIGRATION**
+**YOU CAN ONLY ENABLE CONFIDENTIAL COMPUTING ON A VM WHEN YOU FIRST CREATE THE INSTANCE.**
+
+It has the following features and benefits:
+
+* **Isolation**:
+  - Encryption keys are generated by AMD Secure Processor (SP) during VM creation and reside solely within the AMD Sytem-On-Chip (SOC). These keys are not even accessible by Google, offering improved isolation.
+* **Attestation**:
+  - Confidential VM uses [Virtual Trusted Platform Module (vTPM)](https://trustedcomputinggroup.org/resource/trusted-platform-module-tpm-summary/) attestation. Every time an AMD SEV-based Confidential VM boots, a [launch attestation report event](https://cloud.google.com/compute/confidential-vm/docs/monitoring#about_launch_attestation_report_events) is generated.
+* **High performance**:
+  - AMD SEV offers high performance for demanding computational tasks. Enabling Confidential VM has little or not impact on most workloads, with only a 0-6% degradation in performance.
+
+**Creating a Confidential VM**
+```
+gcloud compute instances create INSTANCE_NAME \
+  --machine-type "MACHINE_TYPE" --zone "ZONE_NAME" \
+  --confidential-compute --maintenance-policy=TERMINATE \
+  --image-family=IMAGE_NAME \
+  --image-project=IMAGE_PROJECT
+```
+
+SAMPLE:
+
+```
+gcloud compute instances create example-instance \
+  --machine-type "n2d-standard-16" --zone "us-central1-f" \
+  --confidential-compute --maintenance-policy=TERMINATE \
+  --image="example-cvm-image" \
+  --image-project="public-image-project"
+```
+
+**Using the AMD EPYC Milan processor**
+To set your instance to the AMD EPYC Milan processor, include the `--min-cpu-platform="AMD Milan"` flag in the gcloud compute instances create command. Learn more about [Compute Engine and AMD EPYC Milan processors](https://cloud.google.com/blog/products/compute/3rd-gen-amd-epyc-comes-to-compute-engine-n2d-machine-family).
+
+Command to verify confidential computing is enable : `$ dmesg | grep SEC | head`
+
+
+</details>
+
+# Section 4. Managing Operations in a Cloud Solution environment
+
+<details>
+<summary> 4.1 - Building and deploying secure infrastructure and applications </summary>
+
+### 4.1.a - Automating security scanning for Common vulnerabilities and Exporsures (CVEs) through a CI/CD pipeline
+
+
+![Container Analysis](https://cloud.google.com/static/container-analysis/images/ca-information-diagram.svg)
+
+* Automatic Scanning with [Container Scanning API](https://cloud.google.com/container-analysis/docs/container-scanning-overview)
+* Manual Scanning with the [On-Demand Scanning API](https://cloud.google.com/container-analysis/docs/on-demand-scanning)
+
+**Container Scanning API**
+When enabled, allows you to automate OS vulnerability detection, scanning each time you push an image to Container Registry or Artifact Registry.
+
+Artifcat Registry:
+
+```
+gcloud artifacts docker images describe \
+LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE_ID:TAG \
+--show-package-vulnerability
+
+gcloud artifacts docker images describe \
+LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE_ID@sha256:HASH \
+--show-package-vulnerability
+```
+
+Container Registry (subset of artifcat registry):
+```
+gcloud beta container images describe HOSTNAME/PROJECT_ID/IMAGE_ID@sha256:HASH \
+--show-package-vulnerability
+```
+
+
+**On-Demand Scanning API**
+Allows you to manually scan container images for OS vulnerabilities, either locally on your computer or remotely in Container Registry or Artifact Registry.
+https://cloud.google.com/container-analysis/docs/ods-cloudbuild
+
+Setup a Cloud Build Pipeline to check/scan :
+```
+steps:
+   - id: build
+     name: gcr.io/cloud-builders/docker
+     entrypoint: /bin/bash
+     args:
+     - -c
+     - |
+       docker build -t us-central1-docker.pkg.dev/$_PROJECT_ID/ods-build-repo/ods-test:latest -f ./Dockerfile . &&
+       docker image inspect us-central1-docker.pkg.dev/$_PROJECT_ID/ods-build-repo/ods-test:latest --format \
+       '{{index .RepoTags 0}}@{{.Id}}' > /workspace/image-digest.txt &&
+       cat image-digest.txt
+   - id: scan
+     name: gcr.io/google.com/cloudsdktool/cloud-sdk
+     entrypoint: /bin/bash
+     args:
+     - -c
+     - |
+       gcloud artifacts docker images scan us-central1-docker.pkg.dev/$_PROJECT_ID/ods-build-repo/ods-test:latest \
+       --format='value(response.scan)' > /workspace/scan_id.txt
+   - id: severity check
+     name: gcr.io/google.com/cloudsdktool/cloud-sdk
+     entrypoint: /bin/bash
+     args:
+     - -c
+     - |
+       gcloud artifacts docker images list-vulnerabilities $(cat /workspace/scan_id.txt) \
+       --format='value(vulnerability.effectiveSeverity)' | if grep -Fxq $_SEVERITY; \
+       then echo 'Failed vulnerability check' && exit 1; else exit 0; fi
+   - id: push
+     name: gcr.io/cloud-builders/docker
+     entrypoint: /bin/bash
+     args:
+     - -c
+     - |
+       docker push us-central1-docker.pkg.dev/$_PROJECT_ID/ods-build-repo/ods-test:latest
+images: ['us-central1-docker.pkg.dev/$_PROJECT_ID/ods-build-repo/ods-test:latest']
+
+```
+
+
+### 4.1.b - Automating virtual machine image creation, hardening, and maintenance
+
+https://cloud.google.com/compute/docs/images/image-management-best-practices
+
+Automating using Packer : https://cloud.google.com/architecture/automated-build-images-with-jenkins-kubernetes
+
+
+#### Secure Images
+Define an Organization Policy that only allow compute engine VMs to be created from approved images and use only Trust images.
+
+```
+constraint: constraints/compute.trustedImageProjects
+listPolicy:
+  allowedValues:
+    - projects/debian-cloud
+    - projects/cos-cloud
+  deniedValues:
+    - projects/unwanted-images
+```
+Use Hardened custom OS images to help reduce the surface of vulnerability for the instance.
+
+Subscribe to [gce-image-notifications](https://groups.google.com/forum/#!aboutgroup/gce-image-notifications) to recieve notifications about Compute Engine image update releases.
+
+Compute Engine predefines the following curated IAM roles that you can use for image management:
+
+* `roles/compute.imageUser`:
+  * Permission to list, read, and use images in your requests, without having other permissions on the image.
+* `roles/compute.storageAdmin`:
+  * Permissions to create, modify, and delete disks, images, and snapshots.
+
+As a best practice, Google recommends keeping all your custom images in a single project dedicated to hosting these images and nothing else.
+
+#### Patch Managment
+Use OS patch management to apply operating system patches across a set of Compute Engine VM instances (VMs).Long running VMs require periodic system updates to protect against defects and vulnerabilities.
+
+The OS patch management service has two main components:
+
+* Patch compliance reporting:
+  *  which provides insights on the patch status of your VM instances across Windows and Linux distributions. Along with the insights, you can also view recommendations for your VM instances.
+* Patch deployment:
+  * which automates the operating system and software patch update process. A patch deployment schedules patch jobs. A patch job runs across VM instances and applies patches.
+
+**Benefits**
+* Create patch approvals. You can select what patches to apply to your system from the full set of updates available for the specific operating system.
+* Set up flexible scheduling. You can choose when to run patch updates (one-time and recurring schedules).
+* Apply advanced patch configuration settings. You can customize your patches by adding configurations such as pre and post patching scripts.
+* Manage these patch jobs or updates from a centralized location. You can use the the OS patch management dashboard for monitoring and reporting of patch jobs and compliance status.
+
+
+Running a patch job:
+
+```
+gcloud compute os-config patch-jobs execute \
+    --instance-filter-all \
+    --duration="1h30m" --reboot-config="DEFAULT" \
+    --apt-dist --windows-exclusive-patches=4339284 \
+    --yum-minimal --yum-security \
+    --async
+```
+
+Instances filter examples:  https://cloud.google.com/compute/docs/os-patch-management/create-patch-job#example-instance-filters
+
+
+Owners of a Cloud project have full access to run and manage patch jobs. For all other users, you need to grant permissions. You can grant one of the following granular roles:
+
+`roles/osconfig.patchJobExecutor`: Contains permissions to run, cancel, get, and list patch jobs. It also contains permissions to view instance details for a patch job.
+`roles/osconfig.patchJobViewer`: Contains permissions for read-only access to get and list patch jobs. It also contains permissions to view instance details for a patch job.
+
+#### Service Accounts and IAMs
+A default compute engine service account is created for every GCP project when Compute Engine API is enabled. The default SA has `Project Editor` role which can be dangerous as it has access to create and delete resources.
+
+The default SA can be assigned to an instance created or you can specifiy another custom sa, which would require the correct permissions.
+
+When an instance is assigned a service account, the VM authenticates using the identity of the service account when making calls to Google APIs.
+
+Specifying _scopes_ can limit what the default service account can and cannot do.
+
+Scopes:
+* Allow default access:
+  * Read-only access to storage
+  * Access to Cloud Logging and Monitoring
+* Allow full access:
+  * can grant access to all Cloud APIs
+  * Not best practice
+  * Violates Least priviledge best practices
+* Set access for each API:
+  * Choose requirements for you application
+  * Can grant individual access to specific Cloud Apis
+  * Follows least priviledge best practices
+
+Using the default account, the instance(s) must be stopped in order to change the scopes associated. If using a custom/user-managed service account, IAM roles can be changed without needing to stop instances.
+
+```
+gcloud compute instances set-scopes [INSTANCE_NAME] --scopes [SCOPES]
+```
+`--scopes compute-rw,storage-ro,etc`
+
+From a security standpoint it is NOT recommended to use the default service account, instead create a new one that follows the princal of least privilege.
+
+### 4.1.c - Automating container image creation, verification, hardening, maintenance, and patch Management
+
+#### Container Best Practices
+A full list of best practices can be found [here](https://cloud.google.com/blog/products/gcp/7-best-practices-for-building-containers).
+
+Highlights:
+
+* Single App Per Container
+  * Ex (Apache/MySQL/PHP stack):
+    * Each should be their own container
+* Properly handle PID 1, signal handling and zombie processes
+  * Handle SIGTERM/SIGKILL in you application
+  * Lauch process using `CMD` or `ENTRYPOINT`
+    * If additional preparation is needed before launching your process, launch a shell script using the `exec` command.
+  * Docker and k8s can only handle signals to the process that has PID 1 inside a container
+* Remove unnecessary tools
+  * ex (netcat, tracing or debugging tools)
+* Avoid running as root
+  * ex disable use of sudo
+* Launch Containers is RO model `--read-only` docker command flag or `readOnlyRootFilesystem` option in Kubernetes.
+  * This can also be enforced using a [`PodSecurityPolicy`](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#volumes-and-file-systems)
+* Build the smallest image as possible
+  * [Reduce clutter in your image](https://cloud.google.com/solutions/best-practices-for-building-containers#reduce_the_amount_of_clutter_in_your_image).
+* Use vulnerability scanning in Container Registry
+* Enable process namespace sharing in kubernetes  
+  - Process namespace sharing for a Pod can be enabled where kubernetes uses a single process namespace for all containers in that Pod
+  - Kubernetes Pod infrastructure container becomes PID 1 and automatically reaps orphaned processes
+* Use a speicialize init system
+  - Init systems suche as `tini` created especially for containers that can be used to handle signals and reaps any zombie processes
+* Optimize for the Docker build cache
+  - Images are built layer by layer, and in a Dockerfile, each instruction creates a layer in the resulting image.
+  - Docker build cache can accelerate the building of container images.
+  - During a build, when possible, Docker reuses a layer from a previous build and skips a potentially costly step.
+  - Docker can use its build cache only if all previous build steps used it.
+* Scan images for vulnerabilities
+  - Container Analysis API (On-Demand Scanning, )
+
+
+
+</details>
+
+<details>
+<summary> 4.2 - Configuring logging, monitoring, and detection </summary>
+
+### 4.2.a - Configuring and analyzing network logs (firewall rules, VPC flow logs, packet mirroring)
+
+#### VPC Flow Logs
+VPC Flow Logs records network flows sent from or received by VM instances.
+VPC flow logs will only include traffic seen by a VM (e.g., if traffic was blocked by an egress rule, it will be seen but traffic blocked by an ingress rule, not reaching a VM, will not be seen.
+
+The traffic will include:
+* Network flows between VMs in the same VPC
+* Network flows between VMs in a VPC network and hosts in your on-premises network that are connected via VPN or Cloud Interconnect
+* Network flows between VMs and end locations on the Internet
+* Network flows between VMs and Google services in production Protocols: you can monitor network flows for TCP and UDP.
+
+These logs can be used to monitor network traffic to and from your VMs, forensics, real-time security analysis, and expense optimization.
+
+You can view flow logs in Cloud Logging, and you can export logs to any destination that Cloud Logging export supports (Cloud Pub/Sub, BigQuery, etc.).
+
+Flow logs are aggregated by connection, at a 5 second interval, from Compute engine instances and exported in real time. By subcribing to Cloud Pub/Sub, you can analyze flow logs using real-time streaming.
+
+VPC Flow Logs service is disabled by default on all VPC subnets. When enabled it applies to all VM instances in the subnet.
+
+Logs are stored in Logging for 30 days by default.
+
+**Log sampling and processing**
+Google Cloud samples packets that leave and enter a VM to generate flow logs. Not every packet is captured into its own log record. About 1 out of every 30 packets is captured, but this sampling rate might be lower depending on the VM's load. You cannot adjust this rate.
+
+After the flow logs are generated, Google Cloud processes them according to the following procedure:
+
+1. **Filtering**: You can specify that only logs that match specified criteria are generated. For example, you can filter so that only logs for a particular VM or only logs with a particular metadata value are generated and the rest are discarded.
+2. **Aggregation**: Information for sampled packets is aggregated over a configurable aggregation interval to produce a flow log entry. Time interval can be set to either: 5 seconds (default), 30 seconds, 1, 5, 10 or 15 minutes
+3. **Flow log sampling**: This is a second sampling process. Flow log entries are further sampled according to a configurable sample rate parameter. Rate can be configured: 0.5 (50%) is default, 1.0 (100% all logs kept) down to 0 where no logs are kept.
+4. **Metadata**: If disabled, all Metadata annotations are discarded. If you want to keep metadata, you can specify that all fields or a specified set of fields are retained. Refer to [metadata annotations](https://cloud.google.com/vpc/docs/flow-logs#metadata) for details.
+5. **Write to Logging**: The final log entries are written to Cloud Logging.
+
+To log flows between Pods on the same Google Kubernetes Engine (GKE) node, you must enable Intranode visibility for the cluster by ussing the following command:
+
+```
+gcloud container clusters create CLUSTER_NAME \
+    --region=COMPUTE_REGION \
+    --enable-intra-node-visibility
+
+or
+
+gcloud container clusters update CLUSTER_NAME \
+    --enable-intra-node-visibility
+```
+
+Use the `--no-enable-intra-node-visibility` flag when updating a cluster to disbale intranode visibility.
+
+Enabling VPC Flow Logs can be done via Console (at any time) using the CLI.
+
+```
+gcloud compute networks subnets create|update subnet-name \
+    --enable-flow-logs \
+    [--logging-aggregation-interval=aggregation-interval \
+    [--logging-flow-sampling=0.0...1.0] \
+    [--logging-filter-expr=expression] \
+    [--logging-metadata=(include-all | exclude-all | custom)] \
+    [--logging-metadata-fields=fields] \
+    [other flags as needed]
+```
+
+Disbaling VPC flow logs:
+```
+gcloud compute networks subnets update SUBNET_NAME \
+    --no-enable-flow-logs
+```
+
+[VPC Flow Log Lab](https://www.qwiklabs.com/focuses/1236?parent=catalog)
+
+#### VPC Flow Logs Org policies
+
+Org Admins can set the `constraints/compute.requireVpcFlowLogs` constraint to require that VPC flow logs is enabled for all subnets. Sampling rates can be set to either of the the following:
+
+| Policy Value | Sample rate |
+| ------------ | ----------- |
+| ESSENTIAL    | Greater than or equal to 0.1 (10%) and less than 0.5 (50%)|
+| LIGHT   | Greater than or equal to 0.5 (50%) and less than 1.0 (100%)|
+| COMPREHESIVE   | Equal to 1.0 (100%)   |
+
+These policy values can be combined:
+
+| Sample rate | Values to include in constraint |
+| ----------  | ------------------------------- |
+| At least 0.1 (10%) | ESSENTIAL, LIGHT, and COMPREHESIVE   |
+| At least 0.5 (50%) | LIGHT and COMPREHESIVE   |
+| 1.0 (100%)   | COMPREHESIVE   |
+
+Configuring VPC Flow log constraint:
+
+```
+gcloud org-policies describe \
+    compute.requireVpcFlowLogs \
+    [ --organization=ID | --folder=ID | --project=ID ]
+
+** /tmp/policy.yaml **
+name: organizations/ID/policies/compute.requireVpcFlowLogs
+    spec:
+     rules:
+     - values:
+         allowedValues:
+         - ESSENTIAL
+         - LIGHT
+         - COMPREHENSIVE
+
+gcloud org-policies set-policy /tmp/policy.yaml
+```
+
+
+#### Firewall Rules logging
+Firewall Rules Logging allows you to audit, verify, and analyze the effects of your firewall rules. For example, you can determine if a firewall rule designed to deny traffic is functioning as intended. Logging is also useful if you need to determine how many connections are affected by a given firewall rule. Firewall rule logs are created in the project that hosts the network containing the VM instances and firewall rules. With Shared VPC, VM instances are created in service projects, but they use a Shared VPC Network located in the host project. Firewall rules logs are stored in that host project.
+
+**Enable**
+```
+gcloud compute firewall-rules update NAME \
+    --enable-logging
+    --logging-metadata=LOGGING_METADATA
+```
+
+**Disable**
+```
+gcloud compute firewall-rules update NAME \
+    --no-enable-logging
+```
+
+Querying firewall rules in Logs Explorer
+
+```
+resource.type="gce_subnetwork"
+logName="projects/PROJECT_ID/logs/compute.googleapis.com%2Ffirewall"
+
+or
+
+resource.type="gce_subnetwork"
+logName="projects/PROJECT_ID/logs/compute.googleapis.com%2Ffirewall"
+resource.labels.subnetwork_name="SUBNET_NAME"
+
+or
+
+resource.type="gce_subnetwork"
+logName="projects/PROJECT_ID/logs/compute.googleapis.com%2Ffirewall"
+jsonPayload.instance.vm_name="INSTANCE_NAME"
+```
+
+#### Packet mirroring
+Packet Mirroring clones the traffic of specified instances in your Virtual Private Cloud (VPC) network and forwards it for examination. Packet Mirroring captures all traffic and packet data, including payloads and headers. The capture can be configured for both egress and ingress traffic, only ingress traffic, or only egress traffic.
+
+The mirroring happens on the virtual machine (VM) instances, not on the network. Consequently, Packet Mirroring consumes additional bandwidth on the VMs.
+
+Packet Mirroring is useful when you need to monitor and analyze your security status. It exports all traffic, not only the traffic between sampling periods. For example, you can use security software that analyzes mirrored traffic to detect all threats or anomalies.
+
+Use Packet Mirroring to mirror traffic to and from particular VM instances. You can use the collected traffic to help you detect security threats and monitor application performance. Mirrored traffic is sent to VMs where you have installed appropriate software. See [Packet mirroring partner providers](https://cloud.google.com/vpc/docs/packet-mirroring-partners) for a list of vendors who supply software.
+
+![Packet Mirroring Same Network](https://cloud.google.com/static/vpc/images/packet-mirroring/same-network.svg)
+
+![Packet Mirror peered network](https://cloud.google.com/static/vpc/images/packet-mirroring/peer-network.svg)
+
+![Packet Mirroring Shared VPC](https://cloud.google.com/static/vpc/images/packet-mirroring/service-project.svg)
+
+**IAM Roles**
+
+* `compute.packetMirroringUser`: grants user permission to create, update, and delete packet mirroring policies. To use Packet mirroring this roles is reqired by users.
+* `compute.packetMirroringAdmin`: grants users persmission to mirror particular resources. Even if users have permissions to create a packet mirrroring policy, they still require persmission to mirror related sources. Use this role in projects where the owner of a policy might not have any permissions.
+
+**Create a mirroring policy**
+You must have an internal TCP/UDP load balancer that is configured for packet mirroring, and it must be located in the same region as the instances that you're mirroring. All traffic from mirrored sources is sent to the collector instances that are behind the load balancer.
+
+Create the forwarding rule for the internal TCP/UDP load balancer, use the --is-mirroring-collector flag:
+```
+gcloud compute forwarding-rules create COLLECTOR_RULE \
+    --region=REGION \
+    --load-balancing-scheme=internal \
+    --backend-service=COLLECTOR_BACKEND_SERVICE \
+    --ports=all \
+    --is-mirroring-collector \
+    --network=NETWORK
+```
+
+Create the packet mirroring policy:
+```
+gcloud compute packet-mirrorings create POLICY_NAME \
+  --region=REGION \
+  --network=NETWORK_NAME \
+  --collector-ilb=FORWARDING_RULE_NAME \
+  [--mirrored-subnets=SUBNET,[SUBNET,...]] \
+  [--mirrored-tags=TAG,[TAG,...]] \
+  [--mirrored-instances=INSTANCE,[INSTANCE,...]] \
+  [--filter-cidr-ranges=ADDRESS_RANGE,[ADDRESS_RANGE,...]] \
+  [--filter-protocols=PROTOCOL,[PROTOCOL,...]] \
+  [--filter-direction=DIRECTION]
+```
+
+`PROTOCOL` is an IP protocol to mirror. Valid values are tcp, udp, icmp, esp, ah, ipip, sctp, or an IANA protocol number. You can provide multiple protocols in a comma-separated list. If --filter-protocols is omitted, all protocols are mirrored.
+
+`DIRECTION` is the direction of the traffic to be mirrored relative to the VM. By default, this is set to BOTH, which means that both ingress and egress traffic is mirrored. You can restrict which packets are captured by specifying INGRESS to capture only ingress packets or EGRESS to capture only egress packets.
+
+Disbale / Enable a packet mirroring policy to stop or start collection
+
+```
+gcloud compute packet-mirrorings update POLICY_NAME \
+  --region=REGION \
+  --no-enable
+
+or
+
+gcloud compute packet-mirrorings update POLICY_NAME \
+  --region=REGION \
+  --enable
+```
+
+Delete a packet mirror policy:
+
+```
+gcloud compute packet-mirrorings delete POLICY_NAME \
+  --region=REGION \
+```
+
+
+### 4.2.b - Designing an effective logging strategy
+
+Cloud Logging allows you to store, search, analyze, monitor, and alert on logging data and events from Google Cloud and Amazon Web Services.
+
+Using Cloud Logging includes access to the [BindPlane service](https://bluemedora.com/products/bindplane/bindplane-for-stackdriver/), which you can use to collect logging data from over 150 common application components, on-premises systems, and hybrid cloud systems.
+
+The Logging Agent, an application based on [fluentd](https://www.fluentd.org/), which runs on VMs in order to stream logs into Cloud Logging.
+
+Use structure logging, as shown below:
+
+```
+{
+  "insertId": "42",
+  "jsonPayload": {
+    "message": "There was an error in the application",
+    "times": "2019-10-12T07:20:50.52Z"
+  },
+  "httpRequest": {
+    "requestMethod": "GET"
+  },
+  "resource": {
+    "type": "k8s_container",
+    "labels": {
+      "container_name": "hello-app",
+      "pod_name": "helloworld-gke-6cfd6f4599-9wff8",
+      "project_id": "stackdriver-sandbox-92334288",
+      "namespace_name": "default",
+      "location": "us-west4",
+      "cluster_name": "helloworld-gke"
+    }
+  },
+  "timestamp": "2020-11-07T15:57:35.945508391Z",
+  "severity": "ERROR",
+  "labels": {
+    "user_label_2": "value_2",
+    "user_label_1": "value_1"
+  },
+  "logName": "projects/stackdriver-sandbox-92334288/logs/stdout",
+  "operation": {
+    "id": "get_data",
+    "producer": "github.com/MyProject/MyApplication",
+    "first": true
+  },
+  "trace": "projects/my-projectid/traces/06796866738c859f2f19b7cfb3214824",
+  "sourceLocation": {
+    "file": "get_data.py",
+    "line": "142",
+    "function": "getData"
+  },
+  "receiveTimestamp": "2020-11-07T15:57:42.411414059Z",
+  "spanId": "000000000000004a"
+}
+```
+
+You can write structured logs to Logging in several ways:
+
+* Using the Cloud Logging API to write log entries
+  - https://cloud.google.com/logging/docs/samples/logging-write-log-entry
+* Using the Google Cloud CLI to write log entries
+  - `gcloud logging write LOG_NAME '{"key" : "value"} --payload-type=json'`
+* Using the BindPlane service to ingest logs
+  - https://docs.bindplane.bluemedora.com/docs/stackdriver#section--how-do-i-find-my-log-data-
+* Supplying serialized JSON objects to the Logging agent
+
+
+**Logging Agent**
+
+Cloud Logging Agent, `google-fluentd`, is a modified version of [fluentd](https://www.fluentd.org/) log data collector.
+
+How Cloud Logging Agent Works:
+![Logging Agent](https://cloud.google.com/static/logging/docs/images/logging-agent-operation.png)
+
+If your VMs are running in Google Kubernetes Engine or App Engine, the agent is already included in the VM image, so you can skip this page.
+
+The VM images for Compute Engine and Amazon Elastic Compute Cloud (EC2) don't include the Logging agent so you need to install it. The agent runs under both Linux and Windows.
+
+![Logging Agent](images/logging-agent-operation.png)
+
+The agent is supported on GCP COmpute Engine instances and AWS EC2 instances, which sends logs to an [AWS Connector Project](https://cloud.google.com/monitoring/accounts#account-project) in GCP.
+
+App Engine (Standard and Flexibile) has built-in support for writing logs to Cloud Logging.
+
+Google Kubernetes Engine (GKE) node instances have built-in support also for writing to Cloud Logging. [Cloud Operations for GKE](https://cloud.google.com/monitoring/kubernetes-engine/installing) can be enabled on new or existing cluster to add cluster wide logging.
+
+Cloud Run and Cloud Functions (HTTP and Background) have built-in support for writing logs to Cloud Logging.
+
+**Install Cloud Logging Agent**
+
+Linux:
+
+```
+curl -sSO https://dl.google.com/cloudagents/add-logging-agent-repo.sh
+sudo bash add-logging-agent-repo.sh --also-install
+```
+
+Windows:
+
+```
+(New-Object Net.WebClient).DownloadFile("https://dl.google.com/cloudagents/windows/StackdriverLogging-v1-19.exe", "${env:UserProfile}\StackdriverLogging-v1-19.exe")
+& "${env:UserProfile}\StackdriverLogging-v1-19.exe"
+```
+
+**Enable Strucuture Logging**
+
+Linux:
+
+```
+sudo yum remove -y google-fluentd-catch-all-config
+sudo yum install -y google-fluentd-catch-all-config-structured
+sudo service google-fluentd restart
+
+
+OR
+
+sudo apt-get remove -y google-fluentd-catch-all-config
+sudo apt-get install -y google-fluentd-catch-all-config-structured
+sudo service google-fluentd restart
+```
+
+windows
+
+```
+Restart-Service -Name StackdriverLogging
+```
+#### Log Storage
+
+GCP leverages the _Logs Router_, which checks the log entry against a set of rules to determine which logs to discard, write/ingest/store in Cloud Logging and which logs to route to other destinations using _sinks_. The supported sink destinations are:
+
+* Cloud Storage: JSON Files stored in GCS buckets; provides inexpensive, long-term storage
+* BigQuery: Tables created in BigQuery datasets; provides big data analysis capabilities
+* Pub/Sub: JSON-formatted messages delivered to Pub/Sub Topics; supports third-party integrations, such as Splunk, with Logging
+* Cloud Logging: Log entries held in log buckets; provides storage in Cloud Logging with customizable retention periods.
+
+
+![Cloud Logging Storage](https://cloud.google.com/static/logging/docs/images/routing-overview-17-09-21.png)
+
+**Log Exclusions**
+
+There are 2 kinds of exclusions:
+* Exclusion Filters:
+  * based on a filter expression
+* Resource-type exclusions:
+  * block all logs from a specific resource types
+
+[Creating Exclusions](https://cloud.google.com/logging/docs/exclusions)
+
+Logs entries can be exported to Cloud Storage, BigQuery or Pub/Sub before they are excluded and they are logs are lost forever.
+
+**Log Retention Periods**
+Two log buckets
+
+* _Required
+  * [Admin Activity audit logs](https://cloud.google.com/logging/docs/audit#admin-activity), [System Event audit logs](https://cloud.google.com/logging/docs/audit#system-event) and [Access Transparency logs](https://cloud.google.com/logging/docs/audit/access-transparency-overview)
+    * Logs generated by Google personnel when they user uploaded content into any service that supports Access Transparency Logs see this [list](https://cloud.google.com/logging/docs/audit/access-transparency-services).
+  * 400 day retention
+  * Not configurable
+* _Default
+  * All other ingested logs
+  * rentention
+    * 7 days on Basic and 30 days on Premium
+  * Configurable upto 3650 days
+  *  `gcloud beta logging buckets update _Default --location=global --retention-days=[RETENTION_DAYS]`
+
+
+See [IAM Documentation](https://cloud.google.com/logging/docs/access-control) for all Cloud Logging Roles/Permissions
+
+Setup
+
+
+### 4.2.c - Logging, monitoring, responding to, and remediating security incidents
+
+#### Cloud Monitoring and Alerting
+Cloud Monitoring uses _Workspaces_ to organize monitoring information contained in one or more GCP projects or AWS Accounts.
+
+Each workspace has a _host project_.The host project is the Google Cloud project used to create the Workspace. The name of the Workspace is set to the name of host project. **This isn't configurable.**
+
+A _Workspace_ can be configured to monitor up to 100 GCP projects and AWS accounts.
+
+![Cloud Monitoring Workspaces](images/Workspaces-1.0c.png)
+
+#### Cloud Monitoring Agent
+The Cloud Monitoring agent is a [collectd](https://collectd.org/)-based daemon that gathers system and application metrics from virtual machine instances and sends them to Monitoring. By default, the Monitoring agent collects disk, CPU, network, and process metrics.
+
+The Cloud Monitoring agent is s optional but recommended to be installed on all VMs (GCE and AWS EC2) that you wish to monitor. Monitoring can access some instance metrics without the Monitoring agent, including CPU utilization, some disk traffic metrics, network traffic, and uptime information. Monitoring uses the Monitoring agent to access additional system resources and application services in virtual machine (VM) instances. If you want these additional capabilities, you should install the Monitoring agent.
+
+
+* App-Engine Standard has built-in Monitoring support, no agent required.
+* App Engine Flexible, Dataflow, Dataproc have pre-installed agents with service-specific configurations
+* GKE
+  * has Cloud Operations for GKE pre-installed which offers monitoring and logging enabled by default
+
+#### Alerting
+Cloud Monitoring allows alerting to give timely awareness to problems in you cloud apps so they can be resolved quickly.
+
+This is accomplished by setuping _Alerting Policies_. Each policies contains:
+  * Conditions:
+    * identify when a resource or a group of resources are in a state that require action to be taken.
+    * Type of conditions can be found [here](https://cloud.google.com/monitoring/alerts/types-of-conditions).
+  * Notifications:
+    * Where to send the alert to:
+      * Email
+      * Page Duty
+      * Slack
+      * SMS
+      * Webhooks
+      * Pub/Sub
+  * Documentation:
+    * Any details around how to solve the issue.
+
+In order to create alerting policies the user must have one of the following IAM roles assigned:
+  * `roles/monitoring.alertPolicyEditor`
+  * `role/monitoring.editor`
+  * `role/monitoring.admin`
+  * `role/owner`
+
+
+
+### 4.2.d - Exporting logs to external systems
+
+#### Exporting Logs
+Exporting involves writing a filter that selects the log entries you want to export, and choosing a destination in Cloud Storage, BigQuery, Pub/Sub, or Cloud Logging. The filter and destination are held in an object called a sink. Sinks can be created in Google Cloud projects, organizations, folders, and billing accounts.
+
+To create sinks, the user must have the IAM roles of `role/owner` or `role/logging.configWriter`.
+
+Logging export scenerios and best practices can be found [here](https://cloud.google.com/solutions/design-patterns-for-exporting-stackdriver-logging).
+
+When logs are exported to BigQuery, dated tables are created to hold log entries and log entries are placed in the tables whose names are based on the entries' log names.
+
+#### Exporting logs to external systems
+* Splunk
+  * [Pub/Sub logs To Splunk via Dataflow](https://cloud.google.com/solutions/exporting-stackdriver-logging-for-splunk#deploy_splunk_dataflow_template)
+    * create a Dataflow job that pulls messages from the previously created Pub/Sub subscription, converts payloads into Splunk HEC event format, and forwards them to Splunk HEC.
+  * [Splunk-Add on For Google Cloud](https://cloud.google.com/solutions/exporting-stackdriver-logging-for-splunk#configure_splunk_add-on_for_gcp)
+    * The Splunk Add-on for Google Cloud uses the Pub/Sub topic and a service account in Google Cloud. The service account is used to generate a private key that the add-on uses to establish a Pub/Sub subscription and ingest messages from the logging export topic. The appropriate IAM permissions are required to allow the service account to create the subscription and list the components in the Pub/Sub project that contains the subscription.
+* ElasticSearch:
+  *  The [Elastic Stack](https://www.elastic.co/products) has multiple solutions for ingesting data into an Elasticsearch cluster. [Logstash](https://www.elastic.co/products/logstash) and [Beats](https://www.elastic.co/products/beats) are the core products used for collecting, transforming, and ingesting data. Choosing between Logstash and Beats depends on your data volume, ingest rates, and latency requirements. This solution focuses on the Logstash component of the Elastic Stack because Logstash is the most flexible option for working with logs exported from Logging.
+     *  Logstash
+        *  Use [Pub/Sub input plugin](https://github.com/logstash-plugins/logstash-input-google_pubsub) and [Cloud Storage input plugin](https://github.com/josephlewis42/logstash-input-google_cloud_storage) to integrate with Logstash.
+
+
+
+### 4.2.e - Configuring and analyzing Google Cloud Audit logs and data access Logs
+
+Google Cloud services write audit logs to help you answer the questions, "Who did what, where, and when?" within your Google Cloud resources. Your Google Cloud projects contain only the audit logs for resources that are directly within the Cloud project. Other Google Cloud resources, such as folders, organizations, and billing accounts, contain the audit logs for the entity itself.
+
+Audit Logs are comprised of the following two type which are stored in Cloud Logging:
+* **Admin Activity Logs**: Includes "admin write" operations that write metadata or configuration information. You can't disable Admin Activity audit logs.
+* **Data Access audit logs**: Includes "admin read" operations that read metadata or configuration information. Also includes "data read" and "data write" operations that read/write user-provided data. Data Access audit logs are disabled by default and aren't written unless explicitly enabled (the exception is Data Access audit logs for BigQuery, which can't be disabled).
+
+**IAM Permissions and Roles**
+* `roles/logging.viewer`: read/only access to Admin Activity, Policy Denied, and System Event audit logs. You cannot view any Data Access Logs.
+* `roels/logging.privateViewer`: includes permissions from `roles/logging.viewer` plus the ability to read Data Access logs in the `_Required` and `_Default` buckets.
+
+Reading Audti logs using gcloud:
+```
+gcloud logging read "logName : projects/PROJECT_ID/logs/cloudaudit.googleapis.com" \
+    --project=PROJECT_ID | --folder=FOLDER_ID | --organization=ORG_ID | --billing-account=BILLING_ACCOUNT_ID
+```
+
+**Configuring Data Access Audit logs**
+https://cloud.google.com/logging/docs/audit/configure-data-access
+
+The audit log configuraion consists of a list of _AuditConfig_ objects. Each object configures teh logs for one service, or it establishes a broader configuration for all services. Looks like the following:
+
+```
+{
+  "service": SERVICE,
+  "auditLogConfigs": [
+    {
+      "logType": "ADMIN_READ"
+      "exemptedMembers": [ PRINCIPAL,]
+    },
+    {
+      "logType": "DATA_READ"
+      "exemptedMembers": [ PRINCIPAL,]
+    },
+    {
+      "logType": "DATA_WRITE"
+      "exemptedMembers": [ PRINCIPAL,]
+    },
+  ]
+},
+```
+
+The following applies for _allServices_ as well as a fine grain exemption for cloud sql:
+
+```
+"auditConfigs": [
+  {
+    "auditLogConfigs": [
+      {
+        "logType": "ADMIN_READ"
+      },
+      {
+        "logType": "DATA_WRITE"
+      },
+      {
+        "logType": "DATA_READ"
+      }
+    ],
+    "service": "allServices"
+  },
+  {
+    "auditLogConfigs": [
+      {
+        "exemptedMembers": [
+          "499862534253-compute@developer.gserviceaccount.com"
+        ],
+        "logType": "ADMIN_READ"
+      }
+    ],
+    "service": "cloudsql.googleapis.com"
+  }
+],
+```
+
+Use the [setIamPolicy API](https://cloud.google.com/resource-manager/reference/rest/v1/projects/setIamPolicy#http-request) to update the policy binding:
+
+```
+{
+  "auditConfigs": [
+    {
+      "auditLogConfigs": [
+        {
+          "logType": "ADMIN_READ"
+        },
+        {
+          "logType": "DATA_WRITE"
+        },
+        {
+          "logType": "DATA_READ"
+        }
+      ],
+      "service": "allServices"
+  },
+  "bindings": [
+  {
+    "members": [
+      "user:colleague@example.com"
+    ],
+    "role": "roles/editor"
+  },
+  {
+    "members": [
+      "user:myself@example.com"
+    ],
+    "role": "roles/owner"
+  }
+],
+"etag": "BwUsv2gimRs="
+"version": 1
+```
+
+Using gcloud:
+
+```
+--> tmp/policy.YAML
+
+auditConfigs:
+- auditLogConfigs:
+  - logType: DATA_WRITE
+  service: cloudsql.googleapis.com
+bindings:
+- members:
+  - user:colleague@example.com
+  role: roles/editor
+- members:
+  - user:myself@example.com
+  role: roles/owner
+etag: BwVM-FDzeYM=
+version: 1
+
+$ gcloud projects set-iam-policy PROJECT_ID /tmp/policy.yaml
+
+or using json
+
+$ gcloud projects set-iam-policy PROJECT_ID --format=json >/tmp/policy.json
+
+
+```
+
+_biindings_ and _etag_ MUST always be present as per https://cloud.google.com/logging/docs/audit/configure-data-access#updatemask.
+
+
+
+### 4.2.f - Configuring Log exports (log sinks, aggregated sinks, logs router)
+
+**IAM Roles/Permissions**
+
+You have one of the following IAM roles for the Google Cloud organization or folder from which you're routing logs.
+
+* Owner (roles/owner)
+* Logging Admin (roles/logging.admin)
+* Logs Configuration Writer (roles/logging.configWriter)
+
+**Create Logging Sinks - Command Line Samples**
+
+```
+gcloud logging sinks create  NEW_SINK_NAME  DESTINATION  --log-filter="..." ...
+```
+The above command is the general gcloud command to create a sink for exporting logs.
+
+You can leverage one of the following additional flags `--folder`,`--billing-account`, and `--organization` to export logs from those resources. NOTE that by default, using these flags restricts the sink to exporting only the logs held in the named folder, organization, or billing account.
+
+If you additionally add the `--include-children` flag, then the sink becomes an `aggregated` sink and the sink exports logs from all folders and projects contained within the named resource, subject to the filter in the `--log-filter` flag.
+
+Also note that Billing accounts don't contain folders or projects, so `--include-children` has no effect with `--billing-account`.
+
+
+For example, if you're creating an aggregated sink at the folder level and whose destination is a BigQuery dataset, your command might look like the following:
+
+```
+gcloud logging sinks create SINK_NAME \
+bigquery.googleapis.com/projects/PROJECT_ID/datasets/DATASET_ID --include-children \
+--folder=FOLDER_ID --log-filter="logName:activity"
+```
+
+Filter queries:
+
+```
+logName:"projects/PROJECT_ID/logs" AND
+resource.type=RESOURCE_TYPE AND
+resource.labels.instance_id=INSTANCE_ID
+
+OR
+
+logName:("projects/PROJECT_A_ID/logs/" OR "projects/PROJECT_B_ID/logs/") AND ...
+
+OR
+
+logName:"folders/FOLDER_ID/logs/" AND ...
+
+OR
+
+logName:"organizations/ORGANIZATION_ID/logs/" AND ...
+```
+
+When you create a sink, Logging creates a new service account for the sink, called a unique writer identity. Your sink destination must permit this service account to write log entries. You can't manage this service account directly as it is owned and managed by Cloud Logging. The service account is deleted if the sink gets deleted.
+
+To route logs to a resource protected by a service perimeter, you must add the service account for that sink to an access level and then assign it to the destination service perimeter. This isn't necessary for non-aggregated sinks. For details, see [VPC Service Controls: Cloud Logging](https://cloud.google.com/vpc-service-controls/docs/supported-products#logging).
+
+**Get the service account from the `writerIdentity` field in the sink**
+
+```
+gcloud logging sinks describe SINK_NAME
+```
+
+Should look something like this:
+
+```
+serviceAccount:p123456789012-12345@gcp-sa-logging.iam.gserviceaccount.com
+```
+
+Setup the IAM policy (this example routing logs between Logging buckets in different Cloud projects):
+
+```
+{
+"bindings": [
+ {
+   "members": [
+     "user:username@gmail.com"
+   ],
+   "role": "roles/owner"
+ },
+ {
+   "members": [
+     "SERVICE_ACCOUNT"
+   ],
+   "role": "roles/logging.bucketWriter",
+   "condition": {
+       "title": "Bucket writer condition example",
+       "description": "Grants logging.bucketWriter role to service account SERVICE_ACCOUNT used by sink SINK_NAME",
+       "expression":
+         "resource.name.endsWith(\'locations/global/buckets/BUCKET_ID\')"
+   }
+ }
+],
+"etag": "BwWd_6eERR4=",
+"version": 3
+}
+
+$ gcloud projects set-iam-policy DESTINATION_PROJECT_ID output.json
+```
+
+### 4.2.g - Configuring and monitoring Security Command Center (Security Health Analytics, Event Threat Detection, Container Threat Detection, Web Security Scanner)
+
+#### Cloud Security Command Center
+Security Command Center is the canonical security and risk database for Google Cloud. Security Command Center is an intuitive, intelligent risk dashboard and analytics system for surfacing, understanding, and remediating Google Cloud security and data risks across an organization. This is the Security Information and Event Management (SIEM) solution in GCP.
+
+##### Tiers
+* Standard Features
+  * [Security Health Analytics](https://cloud.google.com/security-command-center/docs/concepts-security-health-analytics-overview)
+    * Managed vulnerability assessment scanning for Google Cloud that can automatically detect the highest severity vulnerabilities and misconfigurations for GCP assets.
+      - In Standard Tier the following finding types are included:
+        - DATAPROC_IMAGE_OUTDATED
+        - LEGACY_AUTHORIZATION_ENABLED
+        - MFA_NOT_ENFORCED
+        - NON_ORG_IAM_MEMBER
+        - OPEN_CISCOSECURE_WEBSM_PORT
+        - OPEN_DIRECTORY_SERVICES_PORT
+        - OPEN_FIREWALL
+        - OPEN_GROUP_IAM_MEMBER
+        - OPEN_RDP_PORT
+        - OPEN_SSH_PORT
+        - OPEN_TELNET_PORT
+        - PUBLIC_BUCKET_ACL
+        - PUBLIC_COMPUTE_IMAGE
+        - PUBLIC_DATASET
+        - PUBLIC_IP_ADDRESS
+        - PUBLIC_LOG_BUCKET
+        - PUBLIC_SQL_INSTANCE
+        - SSL_NOT_ENFORCED
+        - WEB_UI_ENABLED
+  * [Web Security Scanner custom scans](https://cloud.google.com/security-command-center/docs/how-to-web-security-scanner-custom-scans)
+    - In standard tier, Web Security Scanner supports custom scans of deployed applications with public URLs and IP addresses that aren't behind a firewall. Scans are manually configured, managed, and executed for all projects, and support a subset of categories in the [OWASP Top Ten](https://owasp.org/www-project-top-ten/).
+  * [Security Command Center errors](https://cloud.google.com/security-command-center/docs/concepts-scc-errors)
+    - Security Command Center provides detection and remediation guidance for configuration errors that prevent Security Command Center and its services from functioning properly.
+  * Support for granting IAM access roles at the Org Level
+  * Access to integrated Google Cloud services, including the following:
+    - Cloud dlp
+    - Cloud Armour
+    - [Anomaly Detection](https://cloud.google.com/security-command-center/docs/concepts-security-sources#anomaly_detection)
+      * Potential findings:
+        * Leaked Service Account Creds
+        * Potential Compromised Machine
+        * Resource(s) used for cryptomining
+        * Resource(s) used for outbound intrusion
+        * Resource(s) used for phishing
+    - [Integration with BigQuery](https://cloud.google.com/security-command-center/docs/how-to-analyze-findings-in-big-query) for exporting findings
+    - Integration with Foresti Security
+      - See below for details
+
+* Premium Feature (Includes all Standar Tier features and addes the following)
+  * [Event Threat Detection](https://cloud.google.com/security-command-center/docs/concepts-event-threat-detection-overview))
+    * Uses log data to discover the following:
+      * Brute force SSH
+      * Cryptomining
+      * IAM abuse (anomalous grant)
+      * Malware
+      * Phising
+      * Data exfiltration
+      * Outgoing DoS
+      * Workspace threats
+        - Leaked passwords
+        - Attempted account breaches
+        - Changes to 2-step verification settings
+        - Changes to SSO settings
+        - Government-backed attacks
+    * If an event is found a `Finding` is written to Security Command Center and to a Cloud Log Project.
+  * [Container Threat Detection](https://cloud.google.com/security-command-center/docs/concepts-container-threat-detection-overview)
+    * Detects the following common runtime attacks:
+      * Added Binary executed
+      * Added Library loaded
+      * Malicious Script executed
+      * Reverse Shell
+  * [Security Health Analytics](https://cloud.google.com/security-command-center/docs/concepts-vulnerabilities-findings):
+    - The Premium tier includes managed vulnerability scans for all Security Health Analytics detectors (140+) and provides monitoring for many industry best practices, and compliance monitoring across your Google Cloud assets. These results can also be reviewed in a Compliance dashboard and exported as manageable CSVs.
+    - In premium tier SHA includes additional monitoring and reporting for
+      * CIS 1.0, 1.2, 1.1
+      * PCI DSS v3.2.1
+      * NIST 800-53
+      * ISO 27001
+  * [Web Security Scanner](https://cloud.google.com/security-command-center/docs/concepts-web-security-scanner-overview)
+    * Includes all standard tier features and additional detectors that support catego in the OWASP Top Ten.
+    * Also adds support for [managed scans](https://cloud.google.com/security-command-center/docs/concepts-web-security-scanner-overview#managed_scans) that are automatically configured. These scans identity the following sec vulnerabilities in your google cloud apps:
+      - Cross-site scripting (XSS)
+      - Flash Injection
+      - Mixed-content (HTTPS & HTTP)
+      - Clear text passwords
+      - Usage of insecure JavaScript libraries
+    * See Below for Details
+  * [VM Threat Detection](https://cloud.google.com/security-command-center/docs/concepts-vm-threat-detection-overview)
+    * Managed service that scans Compute Engine projects and vm instances to detect unwanted applications, such as cryptocurrency mining software, running in VMs. It ingests metadata from the hypervisor into the guest VM's live memory without pausing operations and writes findings to SCC. Including a list of application names, per-process CPU usage, hashes of memory pages, CPU hardware performance counters, and information about executed machine code to determine whether any application matches known cryptomining signatures.
+    * Detects the following common threats and observations:
+      - Execution: Cryotocurrency Mining Hash Match
+      - Exection: Cryptocurrency Mining YARA Rule
+      - Exection: Cryptocurrency Mining Combine Detection (Hash matching & YARA Rule)
+    * VMTD Disable: Inidicates Threat detection is disabled
+  * The Premium tier includes support for granting users IAM roles at the organization, folder, and project levels.
+  * The Premium tier includes the [Continuous Exports](https://cloud.google.com/security-command-center/docs/how-to-export-data#continuous_exports) feature, which automatically manages the export of new findings to Pub/Sub.
+
+
+
+
+#### Forseti
+Forseti gives you tools to understand all the resources you have in Google Cloud Platform (GCP). The core Forseti modules work together to provide complete information so you can take action to secure resources and minimize security risks.
+
+* Inventory:
+  - Saves an inventory snapshot of your GCP resources to CLoud SQL
+  - Understand current resources in GCP
+  - can be configured to run and update snapshot as often as you want
+  - send email notifications when resource snapshots have been updated
+* Scanner:
+  - Periodically compares the rules of GCP resource policies against the policies collected by Inventory, and saves the output for your review into Cloud SQL or Cloud Storage
+* Explain:
+  - helps you understand, test, and develop Cloud Identity and Access Management (Cloud IAM) policies.
+* Enforcer :
+  - uses policies you create to compare the current state of your Compute Engine firewall to the desired state.
+  - an on-demand command-line tool that compares policies in batch mode over all managed projects or against selected projects.
+  - if differences are found, it uses Google Cloud APIs to change resource policy state to match the state you define.
+* Notifier :
+  - keeps you up to date about Forseti findings and actions by send email notifications.
+
+By default, Forseti is designed to be installed with complete organization access, and run with the organization as the root node in the resource hierarchy.
+
+But, you also have the option to run Forseti on a subset of resources:
+
+  1. if you are Org Admin, and you want to run Forseti on a specific folder
+  2. if you are Folder Admin, and you want to run Forseti on a specific folder
+  3. if you are Project Admin, and you want to run Forseti on projects that are only owned by you.
+
+**NOTE: Inventory, Data Model, and Scanner will be supported for use on these subset of resources, but Explain will not be supported.**
+
+The following Google APIS MUST be enabled in order to use Forseti:
+
+* `cloudresourcemanager.googleapis.com`
+* `serviceusage.googleapis.com`
+* `compute.googleapis.com`
+* `cloudasset.googleapis.com`
+
+```
+gcloud services enable \
+    cloudresourcemanager.googleapis.com \
+    serviceusage.googleapis.com \
+    compute.googleapis.com \
+    cloudasset.googleapis.com \
+      --project "${PROJECT_ID}"
+```
+
+##### Deploying Foseti
+Foreseti can be deployed into either Google Compute Engine or a Google Kubernetes Engine Cluster.
+
+The easiest way to deploying it is through the terraform scripts provided by Foresti Security.
+
+Service Account and required APIs can be set up by leveraging the provided script on the [Foreseti Terrafrom Github Repository](https://github.com/forseti-security/terraform-google-forseti/blob/master/helpers/setup.sh).
+
+```
+git clone --branch modulerelease522 --depth 1 https://github.com/forseti-security/terraform-google-forseti.git
+```
+
+```
+cd terraform-google-forseti
+```
+```
+. ./helpers/setup.sh -p PROJECT_ID -o ORG_ID
+```
+
+The above script will create a service account call `cloud-foundation-forseti-<suffix>`, assign it the required roles/permissions and download the service account credentials to `${PWD}/crendentials.json`.
+
+**NOTE: you could also lever the `-f HOST_PROJECT_ID` flag to provision Foreseti into a `Shared VPC Hoste Project`**
+
+Sample `maint.tf`
+
+```
+module "forseti" {
+  source  = "terraform-google-modules/forseti/google"
+  version = "~> 5.2.0"
+
+  gsuite_admin_email       = "superadmin@yourdomain.com"
+  domain                   = "yourdomain.com"
+  project_id               = "my-forseti-project"
+  org_id                   = "2313934234"
+
+  config_validator_enabled = "true"
+}
+```
+
+##### Configurations
+Forseti configurations are global and module-specific settings. Configurations are centrally maintained in the `forseti-security/configs/server/forseti_server_conf.yaml` file that’s organized into module-specific sections. A sample can be found [here](https://github.com/forseti-security/forseti-security/blob/master/configs/server/forseti_conf_server.yaml.sample).
+
+In GCP this configuration file lives in a pre-configured Forseti Cloud Storage Bucket. It is picked up every time Forseti runs (via cronjob).
+
+**Configure to send data to Security Command Center (Cloud SCC)**
+
+Forseti can be configured to send violations events to Cloud SCC.
+
+Use the following steps:
+
+  1. Select `Add Security Source` on the Cloud SCC Dashboard
+  2. Find and select the `Forseti Cloud SCC Connector` in Cloud Marketplace.
+  3. Follow the step-by-step on-boarding flow triggered from the Forseti card.
+       1. Choose the project that is hosting Forseti
+       2. Use exists Forseti SA
+  4. Enable the Cloud SCC API in the Forseti Project either via UI or CLI
+       1. `gcloud services enable securitycenter.googleapis.com`
+
+
+#### Web Security Scanner (Formerly Cloud Security Scanner)
+Web Security Scanner identifies security vulnerabilities in your App Engine, Google Kubernetes Engine (GKE), and Compute Engine web applications. It crawls your application, following all links within the scope of your starting URLs, and attempts to exercise as many user inputs and event handlers as possible. Currently, Web Security Scanner only supports public URLs and IPs that aren't behind a firewall.
+
+It can automatically scan and detect five common vulnerabilities, including cross-site scripting, Flash injection, mixed content (HTTP in HTTPS), clear text passwords (invalid content-type or without `X-Content-Type-Options: nosniff`) and any outdated/insecure libraries.
+
+The Scanner does the following:
+
+  * Navigates every link it finds (except those excluded)
+  * Activates every control and input
+  * Logs in with specified credentials
+  * User-agent and maximum QPS can be configured
+  * Scanner is optimized to avoid false positives
+
+Scheduling the Scanner:
+  * Scans can be scheduled or manually initiated
+  * Scans can be configured to run on a preset schedule
+  * Scan duration scales with size and complexity of application; large apps can take hours to complete
+
+Finding from security scans can be found [here](https://cloud.google.com/security-command-center/docs/concepts-web-security-scanner-overview#scan_findings).
+
+Security Scanner generates real load against your application and can also generate state data in the application.
+
+In order to avoid unwanted impacts :
+
+* Run scans in a test environment
+* Use test accounts
+* Block specific UI elements
+* Block specific URLs
+* Use Backup Data
+
+Labs:
+
+[Getting Started with Cloud Security Scanner](https://google.qwiklabs.com/focuses/1715?catalog_rank=%7B%22rank%22%3A3%2C%22num_filters%22%3A0%2C%22has_search%22%3Atrue%7D&parent=catalog&search_id=6762807)
+
+#### Mute Findings in Security Command center
+
+Mute Findings is a volume management feature in Security Command Center that lets you manually or programmatically hide irrelevant findings, and create filters to automatically silence existing and future findings based on criteria you specify.
+
+Mute Findings works differently than existing volume management solutions. Security Health Analytics lets you use dedicated security marks to [add assets to allowlists](https://cloud.google.com/security-command-center/docs/how-to-use-security-health-analytics#allowlist-assets), which stops detectors from creating security findings for specific assets. Security Command Center also lets you [disable detectors](https://cloud.google.com/sdk/gcloud/reference/alpha/scc/settings/services/modules/disable).
+
+However, Mute Findings offers several advantages over allowlists and disabling detectors:
+
+  * You can mute findings without locating their underlying assets.
+  * Findings that aren't attached to any resources can be muted.
+  * You can create custom filters to fine-tune mute functionality.
+  * Muting findings doesn't stop underlying assets from being scanned. Findings are still generated but remain hidden until you decide to view them.
+
+  To use Mute Findings, you need one of the following Identity and Access Management (IAM) roles at the organization, folder, or project level:
+
+  * View mute rules:
+    - Security Center Admin Viewer (roles/securitycenter.adminViewer)
+    - Security Center Settings Viewer (roles/securitycenter.settingsViewer)
+    - Security Center Mute Configurations Viewer (roles/securitycenter.muteConfigsViewer)
+  * View, create, update, and delete mute rules:
+    - Security Center Admin (roles/securitycenter.admin)
+    - Security Center Admin Editor (roles/securitycenter.adminEditor)
+    - Security Center Settings Editor (roles/securitycenter.settingsEditor)
+    - Security Center Mute Configurations Editor (roles/securitycenter.muteConfigsEditor)
+  * Manually mute findings:
+    - Security Center Findings Editor (roles/securitycenter.findingsEditor)
+
+  You can also create and grant custom roles with some or all of the following permissions:
+
+  * Mute rule read permissions
+    - securitycenter.muteconfigs.get
+    - securitycenter.muteconfigs.list
+  * Mute rule write permissions
+    - securitycenter.muteconfigs.create
+    - securitycenter.muteconfigs.update
+    - securitycenter.muteconfigs.delete
+  * Finding write permissions
+    - securitycenter.findings.setMute
+    - securitycenter.findings.bulkMuteUpdate
+
+Mute/Unmute individual findings (using glcoud):
+```
+gcloud scc findings set-mute FINDING_ID \
+  --RESOURCE=RESOURCE_ID \
+  --source=SOURCE_ID \
+  --mute=MUTED|UNMUTED
+```
+
+Bulk mute findings:
+```
+gcloud scc findings bulk-mute \
+    --RESOURCE=RESOURCE_ID \
+    --filter="FILTER"
+```
+
+For example, to mute all existing low-severity `OPEN_FIREWALL` and `PUBLIC_IP_ADDRESS` findings in the internal-test project, your filter can be `"category=\"OPEN_FIREWALL\" OR category=\"PUBLIC_IP_ADDRESS\" AND severity=\"LOW\" AND resource.project_display_name=\"internal-test\""`.
+
+**Create mute rules**
+Mute rules are Security Command Center configurations that use filters you create to automatically mute future findings based on criteria you specify. New findings that match mute filters are automatically muted on an ongoing basis. A single organization can create a maximum of 1,000 mute rules.
+
+```
+gcloud scc muteconfigs create RULE_NAME \
+  --RESOURCE=RESOURCE_ID \
+  --description=RULE_DESCRIPTION \
+  --filter=FILTER
+```
+Supports `list`, `update`, `get`, and `delete` commands.
+
+</details>
+
+## Section 5. Ensuring Compliance
+<details>
+<summary>5.1 Determining regulatory requirements for the cloud</summary>
+
+### 5.1.a - Determining concerns relative to compute, data, and network
+
+### 5.1.b - Evaluating security shared responsibility model
+
+#### Google's Shared Responsibility Model
+
+![Shared Responsibility Model](images/GCP%20Shared%20Security%20Responsiblity.png)
+
+When an application is moved to Google Cloud Platform, Google handles many lower layers of infrastructure and security, such as Hardware, storage encryption and networking and network security. The upper layers of security remain the customer's responsibility.
+
+##### Data Access
+You must control who has access to your data. This is done through Identityf Access Management (IAM) permissions, Access Control Lists (ACLs) and Firwall rules/security groups.
+
+Another options is to expose your data through REST APIs, in this case Authentication information MUST be provided with the request in order to validate access.
+
+##### Security Assessments
+Performing a vulnerability assessments or pen test against your cloud resources may be required.
+
+GCP does not require notification to perform pen testing, however it must abide and conform to the Cloud Platform Acceptable Use Policy and the Terms of service.
+
+GPC also provides some security assessment services such as :
+    * Web Security Scanner
+    * Forseti Security
+
+### 5.1.c - Configuring security controls within the cloud environments
+
+### 5.1.d - Limiting compute and data for regulatory Compliance
+
+### 5.1.e - Determining the Google Cloud environment in scope for regulatory compliance
+
+#### Standards, Regulations and Certifications
+
+GDPR, SOC 1/2/3, FedRAMP, HIPAA, etc see the [GCP Security Compliance Page](https://cloud.google.com/security/compliance) for more details.
+
+##### FIPS 140-2
+[Federal Information Processing Standard (FIPS) Publication 140-2](https://csrc.nist.gov/csrc/media/publications/fips/140/2/final/documents/fips1402.pdf) is a security standard that sets forth requirements for cryptographic modules, including hardware, software, and/or firmware, for U.S. federal agencies.
+
+GCP uses a FIPS 140-2 validated encryption module called [BoringCrypto (certificate 3318)](https://csrc.nist.gov/projects/cryptographic-module-validation-program/Certificate/3318) in there production environment. This means that both data in transit to the customer and between data centers, and data at rest are encrypted using FIPS 140-2 validated encryption.
+
+NOTE:
+* Google's Local SSD does not have FIPS 140-2 validation, so you need to roll you own if required.
+* Google encrypts traffic between VMs that travel between Google's data centers with NIST-approved encryption algorithms, but not FIPS
+* Apps built and operated in GCP, must include there own FIPS cryptographic module implementation.
+
+##### PCI Compliance
+* App Engine and Cloud Functions
+  * Ingress firewall rules are available
+  * Egress rules are currently not available
+  * Alternative use Compute Engine and GKE
+  * SAQ A-EP, SAQ-D Type merchants must provide compensating controls to meet thg requirements
+
+* Cloud Storage
+  * PAN (Primary Account Number) MUST be unreadible anywhere it is stored.
+    * Leverage Cloud DLP to encrypt if needed
+
+SAQ outlines criteria that you must address to comply with PCI DSS.
+
+SAQ Types:
+* A:
+  * Merchants that have fully outsourced payment card processing to a third-party site.
+  * Customers leaves your site, complete payment and return
+  * Company does NOT touch card info
+* A-EP:
+  * Merchants that outsource payment processing to a third-party provider, but who can access customer card data at any point in the process.
+* D:
+  * Merchants that accept payments online and don't qualify for SAQ A or SAQ A-EP. This type includes all merchants that call a payment processor API from their own servers, regardless of tokenization.
+
+##### Payment Processing Environments
+* Creating a new Google Cloud account to isolate your payment-processing environment from your production environment.
+  * To simplify access restriction and compliance auditing, create a production-quality, payment-processing environment that is fully isolated from your standard production environment and any dev/QA environments
+* Restricting access to your environment.
+  * Allow payment-processing environment access only to individuals who deploy your payment system code or manage your payment system machines (principle of least priviledge).
+* Setting up your virtual resources.
+* Designing the base Linux image that you will use to set up your app servers.
+* Implementing a secure package management solution
+
+##### PCI DSS Compliance on GKE
+
+[PCI GKE Blueprint](https://github.com/GoogleCloudPlatform/pci-gke-blueprint)
+
+#### ISO Standards
+
+* ISO/IEC 27001:
+  * outlines and provides the requirements for an information security management system (ISMS), specifies a set of best practices, and details the security controls that can help manage information risks.
+* ISO/IEC 27017:
+  * gives guidelines for information security controls applicable to the provision and use of cloud services by providing:
+    * Additional implementation guidance for relevant controls specified in ISO/IEC 27002
+    * Additional controls with implementation guidance that specifically relate to cloud services
+  * provides controls and implementation guidance for both cloud service providers like Google and cloud service customers.
+    * Who is responsible for what between the cloud service provider and the cloud customer
+    * The removal/return of assets when a contract is terminated
+    * Protection and separation of the customer’s virtual environment
+    * Virtual machine configuration
+    * Administrative operations and procedures associated with the cloud environment
+    * Customer monitoring of activity within the cloud
+    * Virtual and cloud network environment alignment
+* ISO/IEC 27018:
+  * relates to one of the most critical components of cloud privacy: the protection of personally identifiable information (PII).
+* ISO/IEC 27701:
+  * a global privacy standard that focuses on the collection and processing of personally identifiable information (PII). This standard was developed to help organizations comply with international privacy frameworks and laws, and focuses on three main factors :
+    * Extends the requirements of ISO/IEC 27001 and ISO/IEC 27002 to include data privacy;
+    * Provides a framework for implementing, maintaining, and continuously improving a Privacy Information Management System (PIMS);
+    * Includes requirements and guidance for organizations acting as PII controllers and PII processors.
+  * ISO/IEC 27110:
+    - specifies that all  cybersecurity frameworks should have the following concepts: Identify, Protect, Detect, Respond, Recover. It also outlines the distinction between Information Security and Cybersecurity. These guidelines align with the [NIST Cybersecurity  Framework (CSF)](https://services.google.com/fh/files/misc/gcp_nist_cybersecurity_framework.pdf).
+    - **Identify**: The Identify concept addresses people, policies, processes and technology when defining the scope of activities.
+    - **Protect**: The Protect concept can contain many categories and activities related to the safeguarding of assets against intentional or unintentional misuse.
+Detect: The Detect concept can include traditional asset monitoring and attack detection.
+Respond: The Respond concept can include the traditional incident response concepts as well as policies, procedures and plans.
+Recover: The activities in the Recover concept define the restoration and communication related activities after a cybersecurity event.
+Google's security risk management capabilities are audited as part of ISO/IEC 27001/27002 (Information Security Management), ISO/IEC 27017 (Cloud Security),  FedRAMP, and NIST 800-53, which align with the conceptual framework and recommended guidance specified in ISO/IEC 27110 (Identify, Protect, Detect, Respond, Recover).
+
+
+</details>
 
 
 

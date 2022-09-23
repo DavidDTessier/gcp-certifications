@@ -44,7 +44,7 @@ Define  the following :
 
 The small the RTO and RPO values are the more complex you DR strategy becomes. For smaller RTO and RPO values you can achieve these only by configuring an HA pattern across your production enviroment. In the hybrid world, you would be DRing into GCP.
 
-DR environment should mimic your production environment with similar infrastructure and security controls. 
+DR environment should mimic your production environment with similar infrastructure and security controls.
 
 Use of Infrastructure-As-Code is key for being able to replicate easily and quickly.
 
