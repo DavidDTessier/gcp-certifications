@@ -1149,7 +1149,7 @@ SSL policies give you the ability to control the features of SSL that your Googl
 
 By default, HTTP(S) Load Balancing and SSL Proxy Load Balancing use a set of SSL features that provides good security and wide compatibility. Some applications require more control over which SSL versions and ciphers are used for their HTTPS or SSL connections. You can define SSL policies to control the features of SSL that your load balancer negotiates with clients.
 
-The TLS versions currently supported are TLS 1.0, 1.1 and 1.2. SSL 3.0 or ealier is no longer supported by GCP Load Balancers or SSL Proxy.
+The TLS versions currently supported are TLS 1.0, 1.1 and 1.2. SSL 3.0 or earlier is no longer supported by GCP Load Balancers or SSL Proxy.
 
 There are three pre-configured Google Managed profiles which allow you to specify the level of compatibility that is appropriate for your application. A custom profile is also provided that allows you to select the SSL features you want manually.
 
@@ -1313,7 +1313,7 @@ Google Cloud Armour helps you protect your Google Cloud deployments from multipl
 # Cloud Armour
 Google Cloud Armor delivers defense at scale against infrastructure and application distributed denial of service (DDoS) attacks by using Google's global infrastructure and security systems.
 
-Google Cloud Armor security policies are made up of rules that filter traffic based on layer 3, 4, and 7 attributes. For example, you can specify conditions that match on an incoming request's IP address, IP range, region code, or request headers. Security policies are available only for backend services behind an externall HTTP(s) Load Balancer, which can be in Premium or Standard Tier.
+Google Cloud Armour security policies are made up of rules that filter traffic based on layer 3, 4, and 7 attributes. For example, you can specify conditions that match on an incoming request's IP address, IP range, region code, or request headers. Security policies are available only for backend services behind an externall HTTP(s) Load Balancer, which can be in Premium or Standard Tier.
 
 DDoS protection is automatically provided for HTTP(s), SSL Proxy and TCP Proxy Load Balancing.
 
@@ -1924,6 +1924,12 @@ By default, your App Engine app receives all HTTP requests that are sent to its 
 
 Use App Engine firewalls see https://cloud.google.com/appengine/docs/legacy/standard/python/application-security
 
+### Anthos Service mesh
+
+https://cloud.google.com/service-mesh/docs/security/anthos-service-mesh-security-best-practices
+
+
+
 
 </details>
 
@@ -1992,7 +1998,7 @@ Types:
 Choosing the right connection:
 ![Choose Cloud Interconnect](images/choose-interconnect.png)
 
-## 2.3.c - Establishing priving connectivity between VPC and Google APIs (Private Google Access, Private Google Access for on-premises hosts, Private Service Connect)
+## 2.3.c - Establishing private connectivity between VPC and Google APIs (Private Google Access, Private Google Access for on-premises hosts, Private Service Connect)
 
 ### Private Google API Access
 Private Google API Access enables Compute Engine instances on a VPC subnet to reach
@@ -2089,6 +2095,70 @@ gcloud compute networks vpc-access connectors create [CONNECTOR_NAME] \
 [Configure VPC Access for CLoud Run](https://cloud.google.com/run/docs/configuring/connecting-vpc)
 [Configure VPC Access for Cloud Functions](https://cloud.google.com/functions/docs/connecting-vpc)
 Configure VPC Access for App Engine Standard](https://cloud.google.com/appengine/docs/standard/python/connecting-vpc)
+
+### Private Service Connect
+
+Private Service Connect allows private consumption of services across VPC networks that belong to different groups, teams, projects, or organizations. You can publish and consume services using IP addresses that you define and that are internal to your VPC network.
+
+You can use Private Service Connect to access Google APIs and services, or managed services in another VPC network.
+
+By default, if you have an application that uses a Google service, such as Cloud Storage, your application connects to the default DNS name for that service, such as `storage.googleapis.com`. Even though the IP addresses for the default DNS names are publicly routable, traffic sent from Google Cloud resources remains within Google's network.
+
+With Private Service Connect, you can create private endpoints using global internal IP addresses within your VPC network. You can assign DNS names to these internal IP addresses with meaningful names like `storage-vialink1.p.googleapis.com` and `bigtable-adsteam.p.googleapis.com`. These names and IP addresses are internal to your VPC network and any on-premises networks that are connected to it using Cloud VPN tunnels or VLAN attachments. You can control which traffic goes to which endpoint, and can demonstrate that traffic stays within Google Cloud.
+
+This option gives you access to all Google APIs and services that are included in the API bundles. If you need to restrict access to only certain APIs and services, Private Service Connect with consumer HTTP(S) service controls allows you to choose which APIs and services are made available, for supported regional service endpoints.
+
+For more information about Private Service Connect configurations for accessing Google APIs, see use cases.
+
+![Private Service Connect](https://cloud.google.com/static/vpc/images/private-service-connect-overview.svg)
+
+This can also be used setup service endpoints for third part consumers to connect to applications behind an internal load balancer, as per [documentation](https://cloud.google.com/vpc/docs/private-service-connect#benefits-controls).
+
+More details can be found [here](https://cloud.google.com/vpc/docs/private-service-connect).
+
+* All APIs (all-apis): most Google APIs (same as private.googleapis.com).
+* VPC-SC (vpc-sc): APIs that VPC Service Controls supports (same as restricted.googleapis.com).
+
+IAM Roles required for using Private Service Connect:
+
+To Create a service endpoint:
+  * Compute Network Admin (`roles/compute.networkAdmin`)
+  * Service Directory Editor (`roles/servicedirectory.editor`)
+  * DNS Administrator (`roles/dns.admin`)
+
+To configure google private access:
+  * Compute Network Admin (`roles/compute.networkAdmin`)
+
+
+**Setup Google Private Access for a subnet**
+
+```
+gcloud compute networks subnets update SUBNET_NAME \
+--region=REGION \
+--enable-private-ip-google-access
+```
+
+**Setup Private Service Connect**
+
+```
+gcloud compute addresses create ADDRESS_NAME \
+  --global \
+  --purpose=PRIVATE_SERVICE_CONNECT \
+  --addresses=ENDPOINT_IP \
+  --network=NETWORK_NAME
+```
+
+```
+gcloud compute forwarding-rules create ENDPOINT_NAME \
+  --global \
+  --network=NETWORK_NAME \
+  --address=ADDRESS_NAME \
+  --target-google-apis-bundle=API_BUNDLE \
+  [ --service-directory-registration=REGION_NAMESPACE_URI ]
+```
+
+
+
 
 ## 2.3.d - Configuring Cloud NAT
 
@@ -3255,7 +3325,7 @@ Secret Manager works well for storing configuration information such as database
 
 There are other third-party tools such as [Hashicorp Vault](https://www.vaultproject.io/) and [Berglas](https://github.com/GoogleCloudPlatform/berglas).
 
-**Secrets Manager** encrypts secret data before ts persisted to disk using AES-256 encryption scheme
+**Secrets Manager** encrypts secret data before its persisted to disk using AES-256 encryption scheme
 
 **IAM Roles**
 The following roles a needed in order to manage secrets:
@@ -3286,7 +3356,7 @@ Individual user:
 gsutil acl ch -u john.doe@example.com:WRITE gs://example-bucket
 ```
 
-### Secret Rotation
+#### Secret Rotation
 Secrets can be rotated by adding a new secret version to the secret. Any version of a secret can be accessed as long as it is enabled.
 
 To prevent a secret from being used you should disable it.
@@ -3307,7 +3377,7 @@ A secret can be in one of the following states:
 gcloud secrets versions enable | disable | destroy version-id --secret="secret-id"
 ```
 
-### Replication
+#### Replication
 Secrets have global names and globally replicated metadata, but the location where the secret payload data is stored can be controlled using the replication policy. Each secret has its own replication policy which is set at creation. The locations in the replication policy cannot be updated.
 
 There are two replication types:
@@ -3324,6 +3394,132 @@ There are two replication types:
 
 
 ## 3.1.g - Protecting and managing compute instance metadata
+
+### Secure Boot
+Secure Boot helps ensure that the system only runs authentic software by verifying the digital signature of all boot components, and halting the boot process if signature verification fails
+
+Shielded VM instances run firmware which is signed and verified using Google's Certificate Authority, ensuring that the instance's firmware is unmodified and establishing the [root of trust](https://uefi.org/sites/default/files/resources/UEFI%20RoT%20white%20paper_Final%208%208%2016%20%28003%29.pdf) for Secure Boot. The [Unified Extensible Firmware Interface (UEFI) 2.3.1 firmware](https://uefi.org/sites/default/files/resources/UEFI_Secure_Boot_in_Modern_Computer_Security_Solutions_2013.pdf), securely manages the certificates that contain the keys used by the software manufacturers to sign the system firmware, the system boot loader, and any binaries they load. Shielded VM instances use UEFI firmware.
+
+On each boot, the UEFI firmware verifies the digital signature of each boot component against the secure store of approved keys. Any boot component that isn't properly signed, or isn't signed at all, isn't allowed to run.
+
+If this occurs, the VM instance's serial console log will have an entry containing the strings UEFI: Failed to load image and Status: Security Violation, along with a description of the boot option that failed. To troubleshoot the failure, disable Secure Boot by using the instructions in Modifying Shielded VM options so that you can boot the VM instance, diagnose and resolve the issue, then re-enable Secure Boot.
+
+
+```
+gcloud compute instances update VM_NAME \
+    [--[no-]shielded-secure-boot] \
+    [--[no-]shielded-vtpm] \
+    [--[no-]shielded-integrity-monitoring]
+
+```
+
+#### Shielded VMs
+By default, Shielded VM supports [Container-Optimized OS](https://cloud.google.com/container-optimized-os/docs), various distributions of Linux, and multiple versions of Windows Server. But if you require custom images for your application, you can still take advantage of Shielded VM.
+
+**Copying custom image to Compute Engine**
+```
+gcloud compute images create [IMAGE_NAME] \
+--source-disk [SOURCE_DISK] \
+--source-disk-zone [ZONE] \
+--platform-key-file=<file.der> \
+--key-exchange-key-file=<file.der> \
+--signature-database-file=<file.bin>,<file.der> \
+--forbidden-database-file=<file.bin> \
+--guest-os-features="UEFI_COMPATIBLE[,WINDOWS]"
+```
+
+### OS login
+
+OS Login is the recommend connection option for most scenerios. This feature lets you use Compute Engine IAM users/roles to manage SSH access to Linux instances. You can add an extra layer of security by setting up OS Login with two-factor authentication, and manage access at the organization level by setting up organization policies.
+
+**Setup OS Login**
+```
+gcloud compute project-info add-metadata \
+    --metadata enable-oslogin=TRUE
+
+gcloud compute instances add-metadata VM_NAME \
+    --metadata enable-oslogin=TRUE
+
+OR
+
+gcloud compute instances create INSTANCE_NAME --zone=ZONE --metadata=enable-oslogin=TRUE
+```
+
+After you enable OS Login on one or more instances in your project, those VMs accept connections only from user accounts that have the necessary IAM roles in your project or organization.
+
+If the user(s) do not have `roles/owner`, `roles/editor`, or `roles/compute.instanceAdmin` roles than grant the following:
+* `roles/compute.osLogin`: which doesnt grant admin Permissions
+* `roles/compute.osAdminLogin` : which grants admin Permissions
+* `roles/compute.osLoginExternalUser`: grants access to an instance to user(s) that reside outside the organization
+
+If your VM uses a service account, then each user that connects to the VM using SSH must have the ability to impersonate the service account. Granting the `roles/iam.serviceAccountUser` allows for impersonating a service account.
+
+
+Use HTTPS and SSL for production Web Servers.
+Configure Port Forwarding over SSH.
+```
+gcloud compute ssh example-instance \
+    --project my-project \
+    --zone us-central1-a \
+    -- -L 2222:localhost:8888 -L 2299:localhost:8000
+```
+
+Connecting via Bastion Host to instances without external IPs:
+
+![Bastion Host](images/bastion.png)
+
+**Use Identity Aware Proxy for TCP Forwarding**
+
+IAP's TCP forwarding feature allows users to connect to arbitrary TCP ports on Compute Engine instances. For general TCP traffic, IAP creates a listening port on the local host that forwards all traffic to a specified instance. IAP then wraps all traffic from the client in HTTPS. Users gain access to the interface and port if they pass the authentication and authorization check of the target resource's Identity and Access Management (IAM) policy.
+
+![How IAP TCP Forwarding Works](images/iap-tcp-forwarding-diagram.png)
+
+To configure IAP setup firewalls like such:
+
+```
+gcloud compute firewall-rules create allow-rdp-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:3389 \
+  --source-ranges=35.235.240.0/20
+```
+```
+gcloud compute firewall-rules create allow-ssh-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:22 \
+  --source-ranges=35.235.240.0/20
+```
+```
+gcloud compute firewall-rules create allow-ingress-from-iap \
+  --direction=INGRESS \
+  --action=allow \
+  --rules=tcp:PORT \
+  --source-ranges=35.235.240.0/20
+```
+
+Also grant permissions to use IAP:
+
+```
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+    --member=user:[EMAIL ]\
+    --role=roles/iap.tunnelResourceAccessor
+```
+
+Once IAP is configure you can use tunnel over ssh:
+
+`gcloud compute ssh [INSTANCE_NAME]`
+
+Or use the follow for IAP TCP tunnelling other ports:
+
+```
+gcloud compute start-iap-tunnel [INSTANCE_NAME] [INSTANCE_PORT] `
+    --local-host-port=localhost:LOCAL_PORT `
+    --zone=ZONE
+```
+
+If the instance(s) have no public IP configure a bastion host vm in order to connect to any private VM. The bastion host should be hardend and have necessary firewall rules to limit the source IPs that can connect to it.
+
 
 </details>
 
@@ -4093,6 +4289,10 @@ https://cloud.google.com/compute/docs/images/image-management-best-practices
 
 Automating using Packer : https://cloud.google.com/architecture/automated-build-images-with-jenkins-kubernetes
 
+https://cloud.google.com/software-supply-chain-security/docs/create-secure-image-pipeline?hl=en
+
+
+
 
 #### Secure Images
 Define an Organization Policy that only allow compute engine VMs to be created from approved images and use only Trust images.
@@ -4188,6 +4388,110 @@ From a security standpoint it is NOT recommended to use the default service acco
 
 ### 4.1.c - Automating container image creation, verification, hardening, maintenance, and patch Management
 
+#### Binary Authorization
+Binary Authorization is a service on Google Cloud that provides software supply-chain security for applications that run in the cloud.
+
+It works with images that you deploy to GKE from Container Registry or another container image registry. With Binary Authorization, you can ensure that internal processes that safeguard the quality and integrity of your software have successfully completed before an application is deployed to your production environment.
+
+To enable this service on a project run the following command:
+
+```
+gcloud services enable \
+    container.googleapis.com \
+    containeranalysis.googleapis.com \
+    binaryauthorization.googleapis.com
+```
+
+To create a cluster with `Binary Authorization` enabled run:
+
+```
+gcloud container clusters create \
+    --enable-binauthz \
+    --zone [ZONE] \
+    [CLUSTER_NAME]
+```
+
+A _policy_ in Binary Authorization is a set of rules that govern the deployment of container images to Google Kubernetes Engine (GKE). A policy has the following parts:
+
+* Deployment rules
+* List of exempt images
+
+Each GCP project can have exactly ONE policy.
+
+Sample Policy:
+
+```
+admissionWhitelistPatterns:
+- namePattern: gcr.io/google_containers/*
+- namePattern: gcr.io/google-containers/*
+- namePattern: k8s.gcr.io/*
+- namePattern: gke.gcr.io/*
+- namePattern: gcr.io/stackdriver-agents/*
+globalPolicyEvaluationMode: ENABLE
+defaultAdmissionRule:
+  evaluationMode: ALWAYS_ALLOW
+  enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+name: projects/PROJECT_ID/policy
+```
+
+An _attestation_ is a digital document that certifies that GKE is allowed to deploy the container image.
+
+An attestation is created after a container image is built. Each such container has a globally unique digest. A signer signs the container image digest using a private key from a key pair and uses the signature to create the attestation. At deploy time, the Binary Authorization enforcer uses the attestor's public key to verify the signature in the attestation. Typically one attestor corresponds to exactly one signer.
+
+To enable attestations in Binary Authorization, your policy's `enforcementMode` is set to `REQUIRE_ATTESTATION`.
+
+Creating attestations:
+
+```
+gcloud alpha container binauthz attestations create \
+    --project="${ATTESTATION_PROJECT_ID}" \
+    --artifact-url="${IMAGE_TO_ATTEST}" \
+    --attestor="projects/${ATTESTOR_PROJECT_ID}/attestors/${ATTESTOR_NAME}" \
+    --signature-file=/tmp/ec_signature \
+    --public-key-id="${PUBLIC_KEY_ID}" \
+    --validate
+```
+
+Using Cloud KMS:
+
+```
+gcloud beta container binauthz attestations sign-and-create \
+    --project="${ATTESTATION_PROJECT_ID}" \
+    --artifact-url="${IMAGE_TO_ATTEST}" \
+    --attestor="${ATTESTOR_NAME}" \
+    --attestor-project="${ATTESTOR_PROJECT_ID}" \
+    --keyversion-project="${KMS_KEY_PROJECT_ID}" \
+    --keyversion-location="${KMS_KEY_LOCATION}" \
+    --keyversion-keyring="${KMS_KEYRING_NAME}" \
+    --keyversion-key="${KMS_KEY_NAME}" \
+    --keyversion="${KMS_KEY_VERSION}"
+```
+
+From a user's perspective, the Binary Authorization policy may incorrectly block an image or there may be another issue with the successful operation of the admission controller webhook.
+
+In this "emergency" case, there is a "break glass" capability that leverages a specific annotation to signal to the admission controller to run the pod and skip policy enforcement.
+
+Note: You will want to notify a security team when this occurs as this can be leveraged by malicious users if they have the ability to create a pod.
+In this case, though, your response procedures can be started within seconds of the activity occurring. The logs are available in Stackdriver:
+
+To run an unsigned nginx container with the "break glass" annotation, run:
+
+```
+cat << EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-alpha
+  annotations:
+    alpha.image-policy.k8s.io/break-glass: "true"
+spec:
+  containers:
+  - name: nginx
+    image: "nginx:latest"
+    ports:
+    - containerPort: 80
+EOF
+```
 #### Container Best Practices
 A full list of best practices can be found [here](https://cloud.google.com/blog/products/gcp/7-best-practices-for-building-containers).
 
@@ -5144,7 +5448,7 @@ The Scanner does the following:
   * Navigates every link it finds (except those excluded)
   * Activates every control and input
   * Logs in with specified credentials
-  * User-agent and maximum QPS can be configured
+  * User-agent and maximum request rate (Queries Per Second "QPS") can be configured
   * Scanner is optimized to avoid false positives
 
 Scheduling the Scanner:
@@ -5159,7 +5463,7 @@ Security Scanner generates real load against your application and can also gener
 In order to avoid unwanted impacts :
 
 * Run scans in a test environment
-* Use test accounts
+* Use established test accounts
 * Block specific UI elements
 * Block specific URLs
 * Use Backup Data
@@ -5267,6 +5571,10 @@ GPC also provides some security assessment services such as :
     * Forseti Security
 
 ### 5.1.c - Configuring security controls within the cloud environments
+
+VPC Service perimeters
+
+
 
 ### 5.1.d - Limiting compute and data for regulatory Compliance
 
