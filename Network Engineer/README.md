@@ -3373,8 +3373,6 @@ gcloud compute routers add-bgp-peer NAME \
 Use the same above to create 2 BGP peers for the the second router appliance
 
 
-
-
 </details>
 
 # Section 5: Managing, monitoring, and optimizing network operations
