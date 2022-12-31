@@ -294,26 +294,6 @@ In every subnet four IP addresses are reserved from the primary range:
 
 Your subnet can have primary and secondary CIDR ranges. This is useful if you want to maintain network separation between the VMs and the services running on them. One common use case is GKE. Indeed, worker Nodes get the IP address from the primary CIDR, while Pods have a separate CIDR range in the same subnet. This scenario is referred to as alias IPs in Google Cloud. Indeed, with **alias IPs**, you can configure multiple internal IP addresses in different CIDR ranges without having to define a separate network interface on the VM.
 
-**Create auto mode VPC using gcloud**
-
-```
-gcloud compute networks create NETWORK \
-  --subnet-mode=SUBNET_MODE \
-  --bgp-routing-mode=DYNAMIC_ROUTING_MODE \
-  --mtu=MTU
-```
-
-
-_DYNAMIC_ROUTING_MODE_ can be either `global` or `regional` to control Cloud Router behavior
-
-_SUBNET_MODE_ can be either `auto` or `custom`, _auto_ all subnets will be created automatically by GCP one in each region.
-
-_MTU_ is the maximum transmission unit of the network. MTU can be set to any value from 1300 through 8896 (default is 1460). Its the size, in bytes, of the largest packet supported by a network layer protocol, including both headers and data.
-
-For custom mode subnets you can also include the `--enable-ula-internal-ipv6` and/or `--internal-ipv6-range=ULA_IPV6_RANGE` to setup a dual-stack subnets with internal IPv6 addressing, otherwise only external IPv6 addresses will be created.
-
-_ULA_IPV6_RANGE_ is a `/48` prefix from within the `fd20::/20` range used by Google for internal IPv6 subnet ranges. if the `--internal-ipv6-range` is omitted Google with select a `/48` prefix for the network.
-
 
 ## IP address management and bring your own IP (BYOIP)
 
@@ -583,41 +563,7 @@ If you need to interconnect Shared VPC with your on-premises network, this must 
 
 ![Hybrid Shared VPC](images/hybrid-shared-vpc.png)
 
-#### Provisioning a Shared VPC
 
-**Assgin a project as a Host project**
-
-Authenticate as the Shared VPC admin
-`gcloud auth login SHARED_VPC_ADMIN`
-
-Enable Shared VPC for the project that you need to become a host project. Replace HOST_PROJECT_ID with the ID of the project.
-
-If you have Shared VPC Admin role at the organization level
-
-```
-gcloud compute shared-vpc enable HOST_PROJECT_ID
-```
-
-If you have Shared VPC Admin role at the folder level
-```
-gcloud beta compute shared-vpc enable HOST_PROJECT_ID
-```
-
-Attaching a service project (Shared VPC Admin at the org level):
-
-```
-gcloud compute shared-vpc associated-projects add SERVICE_PROJECT_ID \
-    --host-project HOST_PROJECT_ID
-```
-
-Attaching a service project (Shared VPC admin at folder level):
-
-```
-gcloud beta compute shared-vpc associated-projects add SERVICE_PROJECT_ID \
-    --host-project HOST_PROJECT_ID
-```
-
-Deprovisioning a Shared VPC requires some additional steps which can be found [here](https://cloud.google.com/vpc/docs/deprovisioning-shared-vpc).
 
 
 **Preventing Host Project Deletion**
@@ -699,56 +645,6 @@ FW rules have the following specifications:
 
 By default each VPC have two implied rules, which are not visible to the user, one for egress to allow traffic to any destination IP )to 0.0.0.0/0) and an ingress rule to deny any traffic coming from any network (from 0.0.0.0/0).
 
-**Creating a firewall rule**
-
-```
-gcloud compute firewall-rules create RULE_NAME \
-    [--network NETWORK; default="default"] \
-    [--priority PRIORITY;default=1000] \
-    [--direction (ingress|egress|in|out); default="ingress"] \
-    [--action (deny | allow )] \
-    [--target-tags TAG[,TAG,...]] \
-    [--target-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
-    [--source-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
-    [--source-tags TAG,TAG,] \
-    [--source-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
-    [--destination-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
-    [--rules (PROTOCOL[:PORT[-PORT]],[PROTOCOL[:PORT[-PORT]],...]] | all ) \
-    [--disabled | --no-disabled] \
-    [--enable-logging | --no-enable-logging] \
-    [--logging-metadata LOGGING_METADATA]
-
-```
-
-**Updating exsiting firewall**
-
-```
-gcloud compute firewall-rules update RULE_NAME \
-    [--priority=PRIORITY] \
-    [--description=DESCRIPTION] \
-    [--target-tags=TAG,...] \
-    [--target-service-accounts=IAM_SERVICE_ACCOUNT,_] \
-    [--source-ranges=CIDR_RANGE,...] \
-    [--source-tags=TAG,...] \
-    [--source-service-accounts=IAM_SERVICE_ACCOUNT,_] \
-    [--destination-ranges=CIDR_RANGE,...] \
-    [--rules=[PROTOCOL[:PORT[-PORT]],…]] \
-    [--disabled | --no-disabled] \
-    [--enable-logging | --no-enable-logging]
-```
-
-Sample:
-
-```
-gcloud compute firewall-rules create deny-subnet1-webserver-access \
- --network NETWORK_NAME \
- --action deny \
- --direction ingress \
- --rules tcp \
- --source-ranges 0.0.0.0/0 \
- --priority 1000 \
- --target-tags webserver
-```
 
 #### Best practices for firewall rules
 When designing and evaluating your firewall rules, keep in mind the following best practices:
@@ -1055,7 +951,7 @@ You can establish BGP peering with Google Cloud with two peering options, as fol
 
 * **Direct Peering**:
   - co-located option requiring you have your physiscal device attached to a Google device edge
-  - exchange BGP public routes directly with Goolge AS (ASN 15169)
+  - exchange BGP public routes directly with Goolge _Autonomous system number_ (ASN) (ASN 15169)
   - allows you to connect directly to public IP address of Google services and Google Cloud products.
   - Google Cloud requires you to have `24/7` network operations center (NOC) contact and up-to-date maintainer, **ASN**, **AS-SET**, and router objects in the Internet Routing Registry (IRR).
   - note that if your workload requires super-low latency (<5 milliseconds (ms)) between your on-premises VMs and GCE instances, you must refer to the following list of colocation facilities: https://cloud.google.com/network-connectivity/docs/interconnect/concepts/choosing-colocation-facilities-low-latency#locations-table.
@@ -1441,32 +1337,496 @@ Also leverage Cloud Armor to prevent DDoS and web application attacks
 
 ## Configuring VPC Networks
 
-## Configuring and Managing Firewall ruleSet
+For details on VPCs see [Section 1 - VPC Overview](#virtual-private-cloud-vpc)
+
+
+**Create auto mode VPC using gcloud**
+
+```
+gcloud compute networks create NETWORK \
+  --subnet-mode=SUBNET_MODE \
+  --bgp-routing-mode=DYNAMIC_ROUTING_MODE \
+  --mtu=MTU
+```
+
+_DYNAMIC_ROUTING_MODE_ can be either `global` or `regional` to control Cloud Router behavior
+
+_SUBNET_MODE_ can be either `auto` or `custom`, _auto_ all subnets will be created automatically by GCP one in each region.
+
+_MTU_ is the maximum transmission unit of the network. MTU can be set to any value from 1300 through 8896 (default is 1460). Its the size, in bytes, of the largest packet supported by a network layer protocol, including both headers and data.
+
+For custom mode subnets you can also include the `--enable-ula-internal-ipv6` and/or `--internal-ipv6-range=ULA_IPV6_RANGE` to setup a dual-stack subnets with internal IPv6 addressing, otherwise only external IPv6 addresses will be created.
+
+_ULA_IPV6_RANGE_ is a `/48` prefix from within the `fd20::/20` range used by Google for internal IPv6 subnet ranges. if the `--internal-ipv6-range` is omitted Google with select a `/48` prefix for the network.
+
+Each _new_ GCP project contains a _default_ vpc, as discussed in [section 1 - VPC](#virtual-private-cloud-vpc), this VPC contains the following four default ingress firewall rules:
+
+  * **default-allow-icmp**:
+    - _Internet Control Message PROTOCOL_
+    - used for _ping_ command
+    - icmp
+    - internal and external traffic is allowed
+  * **default-allow-internal**:
+    - IP ranges 10.128.0.0/9
+    - protocols: tcp:0-65535, udp:0-65535, icmp
+    - internal traffic generated from any subnet in the VPC is permitted
+  * **default-allow-rdp**:
+    - _Remote Desktop Protocol_
+    - tcp:3389
+    - internal and external traffic is allowed
+  * **default-allow-ssh**:
+    - _Secure Shell_
+    - tcp:22
+    - in
+
+Also when you create an _auto_ or _custom_ vpc, you have the option to enable these at creation time, through the console as shown below:
+
+![Create VPC](images/create-vpc-console.png)
+
+or through gcloud commands below:
+
+**Creating the VPC**
+```
+gcloud compute networks create test-vpc --project=sec-eng-training --subnet-mode=custom --mtu=1460 --bgp-routing-mode=regional
+```
+**Create and attach a subnet to the VPC**
+```
+gcloud compute networks subnets create test --project=sec-eng-training --range=10.0.0.0/26 --stack-type=IPV4_ONLY --network=test-vpc --region=us-east1 --enable-private-ip-google-access --enable-flow-logs --logging-aggregation-interval=interval-5-sec --logging-flow-sampling=0.5 --logging-metadata=include-all
+```
+
+**Create the allow-internal firewall rule**
+```
+gcloud compute firewall-rules create test-vpc-allow-custom --project=sec-eng-training --network=projects/sec-eng-training/global/networks/test-vpc --description=Allows\ connection\ from\ any\ source\ to\ any\ instance\ on\ the\ network\ using\ custom\ protocols. --direction=INGRESS --priority=65534 --source-ranges=10.0.0.0/26 --action=ALLOW --rules=all
+```
+
+**Create the allow-icmp firewall rule**
+```
+gcloud compute firewall-rules create test-vpc-allow-icmp --project=sec-eng-training --network=projects/sec-eng-training/global/networks/test-vpc --description=Allows\ ICMP\ connections\ from\ any\ source\ to\ any\ instance\ on\ the\ network. --direction=INGRESS --priority=65534 --source-ranges=0.0.0.0/0 --action=ALLOW --rules=icmp
+```
+
+**Create the allow-rdp firewall rule**
+```
+gcloud compute firewall-rules create test-vpc-allow-rdp --project=sec-eng-training --network=projects/sec-eng-training/global/networks/test-vpc --description=Allows\ RDP\ connections\ from\ any\ source\ to\ any\ instance\ on\ the\ network\ using\ port\ 3389. --direction=INGRESS --priority=65534 --source-ranges=0.0.0.0/0 --action=ALLOW --rules=tcp:3389
+```
+
+**Create the allow-ssh firewall rule**
+```
+gcloud compute firewall-rules create test-vpc-allow-ssh --project=sec-eng-training --network=projects/sec-eng-training/global/networks/test-vpc --description=Allows\ TCP\ connections\ from\ any\ source\ to\ any\ instance\ on\ the\ network\ using\ port\ 22. --direction=INGRESS --priority=65534 --source-ranges=0.0.0.0/0 --action=ALLOW --rules=tcp:22
+```
+
+Additionally, you can specify two important options when creating a custom subnet, as follows:
+  * Private Google access (`--enable-private-ip-google-access`):
+    - This option allows private GCE instances to access Google Cloud services such as Cloud Storage.
+  * Flow logs (`--enable-flow-logs`):
+    - This option enables subnet logging, which can be used for troubleshooting and monitoring on GCP.
+    - After choosing On for Flow logs, you need to click on Configure logs to see these options.
+    - Additional fields:
+      - Here, you can configure the aggregation interval and sample rate of the flow logs, as well as whether to include metadata in the flow logs or not.
+      - `--logging-aggregation-interval=interval-5-sec`
+      - `--logging-flow-sampling=0.5`
+      - `--logging-metadata=include-all`
+
+When creating a VPC you must choose the routing option, show in the above commands `--bgp-routing-mode=[MODE]` :
+
+* **Regional**:
+  - _regional_
+  - Restricts Cloud Router to learn only regional routes
+* **Global**
+  - _global_
+  - Allows Cloud Router to learn all routes of the VPC
+
+
+## Configuring and Managing Firewall Rules
+
+Firewall govern traffic to an from GCE instances that will be deployed in the subnets, as described in detail in [Section 1 - Firewalls](#firewalls-eg-service-account-based-tag-based)
+
+
+**Creating a firewall rule**
+```
+gcloud compute firewall-rules create RULE_NAME \
+    [--network NETWORK; default="default"] \
+    [--priority PRIORITY;default=1000] \
+    [--direction (ingress|egress|in|out); default="ingress"] \
+    [--action (deny | allow )] \
+    [--target-tags TAG[,TAG,...]] \
+    [--target-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
+    [--source-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
+    [--source-tags TAG,TAG,] \
+    [--source-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
+    [--destination-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
+    [--rules (PROTOCOL[:PORT[-PORT]],[PROTOCOL[:PORT[-PORT]],...]] | all ) \
+    [--disabled | --no-disabled] \
+    [--enable-logging | --no-enable-logging] \
+    [--logging-metadata LOGGING_METADATA]
+
+```
+
+**Updating exsiting firewall**
+```
+gcloud compute firewall-rules update RULE_NAME \
+    [--priority=PRIORITY] \
+    [--description=DESCRIPTION] \
+    [--target-tags=TAG,...] \
+    [--target-service-accounts=IAM_SERVICE_ACCOUNT,_] \
+    [--source-ranges=CIDR_RANGE,...] \
+    [--source-tags=TAG,...] \
+    [--source-service-accounts=IAM_SERVICE_ACCOUNT,_] \
+    [--destination-ranges=CIDR_RANGE,...] \
+    [--rules=[PROTOCOL[:PORT[-PORT]],…]] \
+    [--disabled | --no-disabled] \
+    [--enable-logging | --no-enable-logging]
+```
+
+Sample:
+```
+gcloud compute firewall-rules create deny-subnet1-webserver-access \
+ --network NETWORK_NAME \
+ --action deny \
+ --direction ingress \
+ --rules tcp \
+ --source-ranges 0.0.0.0/0 \
+ --priority 1000 \
+ --target-tags webserver
+```
+
+The parameters you need to enter when creating a firewall rule are:
+
+* Name:
+  - This is the name of the rule (`--name`), and it must be unique within the project
+* Logs:
+  - `[--enable-logging | --no-enable-logging]`
+  - `[--logging-metadata LOGGING_METADATA]`
+  - This option generates logs when the rule is matched
+* Network:
+  - `--network`
+  - The VPC network to which the firewall rule will be applied
+* Priority:
+  - Rules are evaluated by priority, lower-priority rules are evaluate before others
+    - rules with a priority 1000 will be evaluated before a rule with priority 2000
+  - `--priority`
+* Direction of traffic:
+  - Determines the direction of traffic to apply control
+  - Can be either _ingress_/_in_, _egress_/_out_
+  - Can also use a range of IPs : `[--destination-ranges CIDR_RANGE[,CIDR_RANGE,...]]`
+* Action on match:
+  - Either _allow_ or _deny_
+  - `--action`
+* Targets:
+  - Determines the which entities the rule applies
+  - Can be all instances in a VPC, or some instances that have a tag or service account
+  - `[--target-tags=TAG,...]`
+  - `[--target-service-accounts=IAM_SERVICE_ACCOUNT,_]`
+* Source filter:
+  - Determines the source of the traffic.
+  - Can be IP address ranges, tags, or a service account
+  - `[--source-ranges CIDR_RANGE[,CIDR_RANGE,...]]`
+  - `[--source-tags TAG,TAG,]`
+  - `[--source-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]]`
+* Protocols and ports:
+  - Which protocols and ports the traffic should match in the rule
+  - `[--rules (PROTOCOL[:PORT[-PORT]],[PROTOCOL[:PORT[-PORT]],...]] | all )`
+
+NOTE: Every VM running in the same zone must have a unique name, and you could reuse the same VM name in another zone. This behaviour is called zonal DNS, and it happens for the DNS internal resolution of the fully qualified domain names (FQDNs) of the VM. Zonal DNS is the default for all organizations or standalone projects that have enabled the GCE application programming interface (API) after September 6, 2018. The name format is [vm_name].[zone].[c.project_id].internal.
+
+## VPC Network Peering
+
+Whenever you need to make communication possible between two or more VPC networks together, either in the same project or in two different projects, the only choice you have is VPC peering.
+
+VPC peering can be configured between no more than two VPC networks, but you can configure more than one peering (that is, VPC A <-> VPC B, VPC B <-> VPC C). Please note that transitive VPC Network Peering is not supported (so if you want to peer VPC A and VPC C, you need to configure a third VPC
+Peering, VPC A <-> VPC C). VPC peering can also work for two projects of two different organizations.
+
+![VPC Peering](images/vpc-peering.png)
+
+**Creating VPC Peering**
+
+```
+gcloud compute networks peerings create PEERING_NAME \
+    --network=NETWORK \
+    --peer-project PEER_PROJECT_ID \
+    --peer-network PEER_NETWORK_NAME \
+    [--stack_type= STACK_TYPE] \
+    [--import-custom-routes] \
+    [--export-custom-routes] \
+    [--import-subnet-routes-with-public-ip] \
+    [--export-subnet-routes-with-public-ip]
+```
+
+Replace the following:
+
+* _PEERING_NAME_: The name of the peering configuration.
+* _NETWORK_: The name of the network in your project that you want to peer.
+* _PEER_PROJECT_ID_: The ID of the project containing the network that you want to peer with.
+* _PEER_NETWORK_NAME_: The name of the network that you want to peer with.
+* _STACK_TYPE_: The stack type for the peering connection. Specify IPV4_ONLY to exchange only IPv4 routes. Alternatively, specify IPV4_IPV6 to exchange both IPv4 and IPv6 routes. IPV4_ONLY is the default value.
+* _--import-custom-routes_: tells the network to accept custom routes from the peered network. The peered network must export the routes first.
+* _--export-custom-routes_ tells the network to export custom routes to the peered network. The peered network must be set to import the routes.
+* _--import-subnet-routes-with-public-ip_ tells the network to accept subnet routes from the peered network if that network is using privately used public IPv4 addresses in its subnets. The peered network must export the routes first.
+* _--export-subnet-routes-with-public-ip_ tells the network to export subnet routes that contain privately used public IP addresses. The peered network must be set to import the routes.
+
+Both sides on the peering connection need to have the peering setup, once the Green check mark appears in the console the peering is successful and is active.
+
+
+## Creating a Shared VPC network and sharing subnets with other projects
+
+Detailed in [Shared VPC](#shared-vpc).
+
+Shared VPC allows a complex organization with several independent projects to centralize the administration of the VPC network and lets it share the one network for multiple projects.
+
+The Shared VPC architecture is composed of one host project and several service projects. The host project contains the shared VPC network, while the service projects rely on the host project for networking operations. The following diagram depicts the Shared VPC architecture:
+
+![Shared VPC Architecture](images/shared-vpc.png)
+
+**Configuring host and service projects**
+
+```
+gcloud projects create host-project-34341212 \
+–-name="host-project"
+gcloud projects create serviceproject1-247521 \
+–-name="development"
+gcloud projects create serviceproject2-247521 \
+-–name="production"
+```
+
+**Configure Shared VPC**
+
+```
+gcloud compute networks create shared-vpc \
+--subnet-mode=custom
+gcloud compute networks subnets create dev-subnet\
+--network=shared-vpc \
+--region=us-central1 \
+--range=10.100.0.0/24
+gcloud compute networks subnets create prod-subnet \
+--network=shared-vpc \
+--region=europe-west1 \
+--range=10.200.0.0/24
+```
+
+**Configure FW rules for Shared VPC**
+
+```
+gcloud compute firewall-rules create allow-icmp-inbound \
+--network=shared-vpc \
+–-allow icmp \
+–-source-ranges=0.0.0.0/0
+gcloud compute firewall-rules create allow-ssh-inbound \
+--network=shared-vpc \
+–-allow tcp:22 \
+–source-ranges=0.0.0.0/0
+```
+
+You can enable the host project through the console or via the following gcloud commands:
+
+**Assgin a project as a Host project**
+
+Authenticate as the Shared VPC admin
+`gcloud auth login SHARED_VPC_ADMIN`
+
+Enable Shared VPC for the project that you need to become a host project. Replace HOST_PROJECT_ID with the ID of the project.
+
+If you have Shared VPC Admin role at the organization level
+
+```
+gcloud compute shared-vpc enable HOST_PROJECT_ID
+```
+
+If you have Shared VPC Admin role at the folder level
+```
+gcloud beta compute shared-vpc enable HOST_PROJECT_ID
+```
+
+Attaching a service project (Shared VPC Admin at the org level):
+
+```
+gcloud compute shared-vpc associated-projects add SERVICE_PROJECT_ID \
+    --host-project HOST_PROJECT_ID
+```
+
+Attaching a service project (Shared VPC admin at folder level):
+
+```
+gcloud beta compute shared-vpc associated-projects add SERVICE_PROJECT_ID \
+    --host-project HOST_PROJECT_ID
+```
+
+Deprovisioning a Shared VPC requires some additional steps which can be found [here](https://cloud.google.com/vpc/docs/deprovisioning-shared-vpc).
 
 
 
-    ●  Google Cloud VPC resources (e.g., networks, subnets, firewall rules)
 
-    ●  VPC Network Peering
+## Configuring API access to Google services (e.g., Private Google Access, public interfaces)
 
-    ●  Creating a Shared VPC network and sharing subnets with other projects
+Private Service Connect endpoints are registered with the Service Directory, when a Private Service Connect endpoint is created the following DNS configurations are created:
 
-    ●  Configuring API access to Google services (e.g., Private Google Access, public interfaces)
+  * A Service Directory private DNS zone is created for `p.googleapis.com`
+  * DNS Records are created in `p.googleapis.com` for some commonly used Google APIs and services that are supported and have default DNS names that end with `googleapis.com`. You can create DNS records for those that do not, instructions [here](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis#configure-dns-default)
 
-    ●  Expanding VPC subnet ranges after creation
+**Private Service Connect to access Google APIs**
+Roles required for creating a private service connect endpoint:
+  * `roles/compute.networkAdmin` --> can also be assigned for configuring Private Google Access
+  * `roles/servicedirectory.editor`
+  * `roles./dns.admin`
+
+
+APIs that need to be enabled:
+  * Compute Engine (`compute.googleapapis.com`)
+  * Service Directory (`servicedirectory.googleapis.com`)
+  * Cloud DNS (`dns.googleapis.com`)
+
+
+Enable private access on a subnet use the `--enable-private-ip-google-access` when using the `gcloud compute networks subnet create | update` command
+
+Create the private service connect endpoint:
+
+First reserve the global internal IP to assign to the endpoint, the IP Address must meet these [requirements](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis#ip-address-requirements):
+
+```
+gcloud compute addresses create ADDRESS_NAME \
+  --global \
+  --purpose=PRIVATE_SERVICE_CONNECT \
+  --addresses=ENDPOINT_IP \
+  --network=NETWORK_NAME
+```
+
+Second create a forwarding rule to conenct the endpoint to Google APIs and services:
+
+```
+gcloud compute forwarding-rules create ENDPOINT_NAME \
+  --global \
+  --network=NETWORK_NAME \
+  --address=ADDRESS_NAME \
+  --target-google-apis-bundle=API_BUNDLE \
+  [ --service-directory-registration=REGION_NAMESPACE_URI ]
+```
+
+* _API_BUNDLE_ can be either `all-apis` which will provide access to all [suppoorted APIs](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis#supported-apis) or `vpc-sc` to restrict access to Google APIs that support VPC Service Controls, which are listed [here](https://cloud.google.com/vpc-service-controls/docs/supported-products).
+* _REGION_NAMESPACE_URI_ is the Service Directory region or namespace that you want to use, it must reference the same project that the private service connect endpoint resides in, `projects/PROJECT_NAME/locations/REGION` or `projects/PROJECT_NAME/locations/REGION/namespace/NAMESPACE`
+
+Examples for using the `p.googleapis.com` DNS Names can be found [here](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis#configure-p-dns)
+
+
+
+**Private Service Connect to access Google APIs with consumer HTTP(S) service controls**
+**Private Service Connect to publish and consume managed services**
+
+
+
+## Expanding VPC subnet ranges after creation
+
+You can expand the primary IPv4 range of an existing subnet by modifying its subnet mask, setting the prefix length to a smaller number. The proposed new primary IPv4 range of the subnet must follow the subnet rules.
+
+When expanding the IPv4 range of an automatically created subnet in an auto mode VPC network (or in a custom mode VPC network that was previously an auto mode VPC network), the broadest prefix (subnet mask) you can use is /16. Any prefix broader than /16 would conflict with the primary IPv4 ranges of the other automatically created subnets.
+
+You can't expand subnets that are used exclusively for load balancer proxies. For more information, see Proxy-only subnets for load balancers.
+
+Expanding the primary IPv4 range of a subnet can take several minutes to complete. During expansion, traffic within the subnet is not interrupted.
+
+```
+gcloud compute networks subnets expand-ip-range SUBNET \
+  --region=REGION \
+  --prefix-length=PREFIX_LENGTH
+```
 </details>
 <details>
 <summary> 2.2 Configuring routing. </summary>
 
-    ●  Static vs. dynamic routing
+## Static vs. dynamic routing
 
-    ●  Global vs. regional dynamic routing
+Each VPC has an assigned routing table by default, will some system-generated routes filled in a creation time.
 
-    ●  Routing policies using tags and priority
+Types of routes are discussed in the routing section in [Section 1](#route-types)
 
-    ●  Internal load balancer as a next hop
+### Static Routing
 
-    ●  Custom route import/export over VPC Network Peering
+Let's start introducing static routing into VPC.
+
+The following diagram shows the hybrid interconnection we will use as an example:
+
+![Static Route VPN](images/static-route-vpn.png)
+
+* GCP IPSec VPN GW to other IPSec VPN GW (On-Prem, Other clouds)
+* To create a static route its required to specify:
+   - a unique name,
+   - a network in which the route will be applied,
+   - a destination IP address range of matching traffic,
+   - and a next hop to redirect the traffic to.
+
+
+Use the following gcloud command to manually add a static route:
+
+```
+gcloud compute routes create ROUTE_NAME \
+    --destination-range=DEST_RANGE \
+    --network=NETWORK \
+    NEXT_HOP_SPECIFICATION
+```
+
+_NEXT_HOP_SPECIFICATION_ represents the next hop for the custom static route. You must specify only one of the following as a next hop. For more information about the different types of next hops, see Static route next hops.
+  *   `--next-hop-gateway=default-internet-gateway`: Use this next hop to send traffic outside of the VPC network, including to the Internet or to the IP addresses for Private Google Access.
+  *   `--next-hop-instance=INSTANCE_NAME` and `--next-hop-instance-zone=ZONE`: Use this next hop to direct traffic to an existing VM instance by name and zone. Traffic is sent to the primary internal IP address for the VM's network interface located in the same network as the route.
+  *   `--next-hop-address=ADDRESS`: Use this next hop to direct traffic to the IP address of an existing VM instance.
+  *   `--next-hop-ilb=FORWARDING_RULE_NAME` and `--next-hop-ilb-region=REGION`: Use this next hop with Internal TCP/UDP load balancer to distribute traffic to the load balancer, specified by internal forwarding rule name (or IP address) and region. The load balancer distributes traffic among healthy backends where the load balancer is transparent to the clients in a bump-in-the-wire fashion.
+    -   `--next-hop-vpn-tunnel=VPN_TUNNEL_NAME` and `--next-hop-vpn-tunnel-region=REGION`: Use this next hop to direct traffic to a Cloud VPN tunnel that uses static routing.
+
+### Dynamic Routing
+
+If you have a dynamic environment and you want to automatically react when the network topology changes, you should consider dynamic routing with Cloud Router.
+
+Let's consider another example that's slightly different from the previous one. Here, we will introduce Cloud Router to build a Border Gateway Protocol (BGP) session with the on-premises router. The BGP peering will be built on top of the IPsec tunnel (shown in red) between the Cloud VPN service and the on-premises gateway, so there is no need to use public addresses for the BGP peering establishment. We will have more than one tunnel in the case of high availability VPN (HA VPN). The network diagram is
+shown here:
+
+![Dynamic Route VPN](images/dynamic-route-vpn.png)
+
+
+### Global vs. regional dynamic routing
+
+Cloud Router announces by default all visible subnets, depending on whether you choose Regional or Global dynamic routing mode. In Regional mode, only the subnets within the Cloud Router region will be advertised. In Global mode, all the VPC subnets will be advertised.
+
+**GC Cloud Command to create a Cloud Router**
+
+```
+gcloud compute routers create ROUTER_NAME \
+    --project=PROJECT_ID \
+    --network=NETWORK \
+    --asn=ASN_NUMBER \
+    --region=REGION
+```
+
+Replace the following:
+
+* _ROUTER_NAME_: the name of the Cloud Router
+* _PROJECT_ID_: the project ID for the project that contains the Cloud Router
+* _NETWORK_: the VPC network that contains the instances that you want to reach
+* _ASN_NUMBER_: any private ASN (64512-65534, 4200000000-4294967294) that you are not already using in the on-premises network; Cloud Router requires you to use a private ASN, but your on-premises ASN can be public or private.
+* _REGION_: the region where you want to locate the Cloud Router; the Cloud Router advertises all subnets in the region where it's located
+
+**Note: If you are using Cloud Router with Partner Interconnect, you must specify ASN 16550.**
+
+
+To create a Cloud Router with custom route advertisements, set the `--advertisement-mode` to custom and use the `--set-advertisement-ranges` and `--set-advertisement-groups` flags to specify route advertisements.
+
+```
+gcloud compute routers create ROUTER_NAME \
+    --project=PROJECT_ID \
+    --network=NETWORK \
+    --asn=ASN_NUMBER \
+    --region=REGION \
+    --advertisement-mode custom \
+    --set-advertisement-groups all_subnets \
+    --set-advertisement-ranges 1.2.3.4,6.7.0.0/16
+```
+
+To set the keepalive timer for a BGP peer, use the `--keepalive-interval` option, which sets the interval between BGP keepalive messages that are sent to the peer router. This value must be an integer between 20 and 60 that specifies the number of seconds for the interval. The default is 20 seconds.
+
+## Routing policies using tags and priority
+
+## Internal load balancer as a next hop
+
+`--next-hop-ilb=FORWARDING_RULE_NAME` and `--next-hop-ilb-region=REGION`: Use this next hop with Internal TCP/UDP load balancer to distribute traffic to the load balancer, specified by internal forwarding rule name (or IP address) and region. The load balancer distributes traffic among healthy backends where the load balancer is transparent to the clients in a bump-in-the-wire fashion.
+
+## Custom route import/export over VPC Network Peering
+
+
 </details>
 <details>
 <summary> 2.3 Configuring and maintaining Google Kubernetes Engine clusters.</summary>
@@ -1480,27 +1840,310 @@ Also leverage Cloud Armor to prevent DDoS and web application attacks
 
 
 
-Adding authorized networks for cluster control plane endpoints
+## Adding authorized networks for cluster control plane endpoints
 
-    ## A
 
 </details>
 <details>
 <summary> 2.4 Configuring and managing firewall rules.</summary>
 
-    ●  Target network tags and service accounts
+Firewall govern traffic to and from GCE instances that will be deployed in the subnets, as described in detail in [Section 1 - Firewalls](#firewalls-eg-service-account-based-tag-based)
 
-    ●  Rule priority
 
-    ●  Network protocols
+**Creating a firewall rule**
+```
+gcloud compute firewall-rules create RULE_NAME \
+    [--network NETWORK; default="default"] \
+    [--priority PRIORITY;default=1000] \
+    [--direction (ingress|egress|in|out); default="ingress"] \
+    [--action (deny | allow )] \
+    [--target-tags TAG[,TAG,...]] \
+    [--target-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
+    [--source-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
+    [--source-tags TAG,TAG,] \
+    [--source-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]] \
+    [--destination-ranges CIDR_RANGE[,CIDR_RANGE,...]] \
+    [--rules (PROTOCOL[:PORT[-PORT]],[PROTOCOL[:PORT[-PORT]],...]] | all ) \
+    [--disabled | --no-disabled] \
+    [--enable-logging | --no-enable-logging] \
+    [--logging-metadata LOGGING_METADATA]
 
-    ●  Ingress and egress rules
+```
 
-    ●  Firewall rule logging
+**Updating exsiting firewall**
+```
+gcloud compute firewall-rules update RULE_NAME \
+    [--priority=PRIORITY] \
+    [--description=DESCRIPTION] \
+    [--target-tags=TAG,...] \
+    [--target-service-accounts=IAM_SERVICE_ACCOUNT,_] \
+    [--source-ranges=CIDR_RANGE,...] \
+    [--source-tags=TAG,...] \
+    [--source-service-accounts=IAM_SERVICE_ACCOUNT,_] \
+    [--destination-ranges=CIDR_RANGE,...] \
+    [--rules=[PROTOCOL[:PORT[-PORT]],…]] \
+    [--disabled | --no-disabled] \
+    [--enable-logging | --no-enable-logging]
+```
 
-    ●  Firewall Insights
+Sample:
+```
+gcloud compute firewall-rules create deny-subnet1-webserver-access \
+ --network NETWORK_NAME \
+ --action deny \
+ --direction ingress \
+ --rules tcp \
+ --source-ranges 0.0.0.0/0 \
+ --priority 1000 \
+ --target-tags webserver
+```
 
-    ●  Hierarchical firewalls
+The parameters you need to enter when creating a firewall rule are:
+
+* Name:
+  - This is the name of the rule (`--name`), and it must be unique within the project
+* Logs:
+  - `[--enable-logging | --no-enable-logging]`
+  - `[--logging-metadata LOGGING_METADATA]`
+  - This option generates logs when the rule is matched
+* Network:
+  - `--network`
+  - The VPC network to which the firewall rule will be applied
+* Priority:
+  - Rules are evaluated by priority, lower-priority rules are evaluate before others
+    - rules with a priority 1000 will be evaluated before a rule with priority 2000
+  - `--priority`
+* Direction of traffic:
+  - Determines the direction of traffic to apply control
+  - Can be either _ingress_/_in_, _egress_/_out_
+  - Can also use a range of IPs : `[--destination-ranges CIDR_RANGE[,CIDR_RANGE,...]]`
+* Action on match:
+  - Either _allow_ or _deny_
+  - `--action`
+* Targets:
+  - Determines the which entities the rule applies
+  - Can be all instances in a VPC, or some instances that have a tag or service account
+  - `[--target-tags=TAG,...]`
+  - `[--target-service-accounts=IAM_SERVICE_ACCOUNT,_]`
+* Source filter:
+  - Determines the source of the traffic.
+  - Can be IP address ranges, tags, or a service account
+  - `[--source-ranges CIDR_RANGE[,CIDR_RANGE,...]]`
+  - `[--source-tags TAG,TAG,]`
+  - `[--source-service-accounts=IAM_SERVICE_ACCOUNT[,IAM_SERVICE_ACCOUNT,...]]`
+* Protocols and ports:
+  - Which protocols and ports the traffic should match in the rule
+  - `[--rules (PROTOCOL[:PORT[-PORT]],[PROTOCOL[:PORT[-PORT]],...]] | all )`
+
+NOTE: Every VM running in the same zone must have a unique name, and you could reuse the same VM name in another zone. This behaviour is called zonal DNS, and it happens for the DNS internal resolution of the fully qualified domain names (FQDNs) of the VM. Zonal DNS is the default for all organizations or standalone projects that have enabled the GCE application programming interface (API) after September 6, 2018. The name format is _[vm_name].[zone].[c.project_id].internal_.
+
+## Target network tags and service accounts
+Service Accounts and Network Tags cannot be mixed and matched in any firewall rule.
+
+Use service accounts instead of network tags for strict control over how firewall rules are applied to VMs, as network tags can be inferred while using a service account would require access to it as well.
+
+A network tag is an arbitrary attribute. One or more network tags can be associated with an instance by any IAM member who has permission to edit it. IAM members with the Compute Engine Instance Admin role to a project have this permission. IAM members who can edit an instance can change its network tags, which could change the set of applicable firewall rules for that instance.
+
+A service account represents an identity associated with an instance. Only one service account can be associated with an instance. Access to the service account can be controlled by controlling the grant of the Service Account User role for other IAM members. For an IAM member to start an instance by using a service account, that member must have the Service Account User role to at least use that service account and appropriate permissions to create instances
+
+## Rule priority
+
+Each firewall rule has a priority defined from 0 to 65535 inclusive defaults to 1000. Lower integers indicate higher priorities.
+
+## Network protocols
+
+Firewall rules always block the following traffic
+GRE traffic – Tunneling protocol
+Protocols other than TCP, UDP, ICMP, and IPIP
+Egress traffic on TCP port 25 (SMTP)
+
+Firewall rules always allow the following traffic
+DHCP
+DNS
+Instance metadata (169.254.169.254)
+NTP
+
+## Ingress and egress rules
+
+Ingress (inbound) rule, the target parameter designates the destination VM instances
+
+Egress (outbound) rule, the target designates the source instances.
+
+Every VPC network has two implied firewall rules
+* Implied allow egress rule – allow all egress traffic,
+* Implied deny ingress rule – denies all ingress traffic.
+
+Implied rules cannot be deleted but have the lowest possible priorities and can be overridden
+
+## Firewall rule logging
+
+Use the `[--enable-logging | --no-enable-logging]` flag when creating or updating a FW rule to enable or disable logging.
+
+* Firewall Rules Logging enables auditing, verifying, and analyzing the effects of the firewall rules.
+* Firewall Rules Logging can be enabled individually for each firewall rule whose connections need to log
+* Google Cloud creates an entry called a connection record each time the firewall rule allows or denies traffic.
+  - Each connection record contains the source and destination IP addresses, the protocol and ports, date and time, and a reference to the firewall rule that applied to the traffic.
+* Firewall Rules Logging only records TCP and UDP connections.
+* Firewall Rules Logging cannot be enabled for the implied deny ingress and implied allow egress rules. Instead, create explicit Allow or Deny rules.
+
+
+## Firewall Insights
+
+Helps you better understand and safely optimize your firewall rules. It provides data about how your firewall rules are being used, exposes misconfigurations, and identifies rules that could be made more strict. It also uses machine learning to predict future usage of your firewall rules so that you can make informed decisions about whether to remove or tighten rules that appear to be overly permissive.
+
+Firewall Insights uses Cloud Monitoring metrics and Recommender insights.
+
+**Insights**
+You can use insights to analyze your firewall rule configuration and help simplify your firewall rules. Insights help you identify firewall rules that overlap existing rules, rules with no hits, and unused firewall rule attributes such as IP address and port ranges. You can get the following insights:
+
+* [Shadowed firewall rule](https://cloud.google.com/network-intelligence-center/docs/firewall-insights/concepts/insights-categories-states#shadowed-firewall-rules) insights, which are derived from data about how you have configured your firewall rules. A shadowed rule shares attributes—such as IP address ranges—with other rules of higher or equal priority.
+* [Overly permissive rule](https://cloud.google.com/network-intelligence-center/docs/firewall-insights/concepts/insights-categories-states#overly-permissive-rules) insights, including each of the following:
+  - _Allow rules_ with no hits
+  - _Allow rules_ with unused attributes
+  - _Allow rules_ with overly permissive IP addresses or port ranges
+  - _Deny rule_ insights with no hits during the observation period.
+
+With these insights, you can perform the following tasks:
+
+  * Identify firewall misconfigurations for firewall rules containing IPv4 or IPv6 address ranges.
+  * Optimize firewall rules and tighten security boundaries by identifying overly permissive allow rules and reviewing predictions about their future usage.
+
+**Metrics**
+
+Viewing the following metrics lets you see which firewall rules haven't been used recently.
+
+* `firewall_hit_count`: metric tracks the number of times that a firewall rule was used to allow or deny traffic.
+* `firewall_last_used_timestamp`: metric allows you to see the last time a particular firewall rule was used to allow or deny traffic by viewing the  metric.
+
+**Cloud Logging**
+
+Sample Cloud Logging query for firewall rules:
+
+```
+resource.type="gce_subnetwork"
+logName="projects/PROJECT_ID/logs/compute.googleapis.com%2Ffirewall"
+jsonPayload.instance.vm_name="INSTANCE_ID"
+```
+
+## Hierarchical firewalls
+
+
+* Grouping of rules into a policy object that can apply to many VPC networks in one or more projects. You can associate hierarchical firewall policies with an entire organization or individual folders.
+* Contain rules that allow or deny connections, similar to VPC firewall rules do
+* Can delegate evaluation rules to lower-level policies by using a `goto_next` action
+* Differ from VPC network policies (firewall rules) by:
+  - Every rule within a policy must have a different priority that decides the evaluation order
+  - In addition to **Allow/Deny** actions, rules can evaluate lower-level policies with the `goto_next` actions
+  - Using a tag in a target is not supported. Only networks and service accounts can be used.
+
+  **Creating a organization firewall policy**
+
+  ```
+  gcloud compute firewall-policies create \
+       --organization=123456789012 \
+       --short-name="example-firewall-policy" \
+       --description="rules that apply to all VMs in the organization"
+  ```
+
+  **Add firewall to policy***
+
+  ```
+  gcloud compute firewall-policies rules create 1000 \
+      --action=allow \
+      --description="allow-scan-probe" \
+      --layer4-configs=tcp:123 \
+      --firewall-policy=example-firewall-policy \
+      --organization=123456789012 \
+      --src-ip-ranges=10.100.0.1/32
+  ```
+
+  **Associate the rule to the policy**
+
+  ```
+  gcloud compute firewall-policies associations create \
+      --firewall-policy=example-firewall-policy \
+      --organization=123456789012
+  ```
+
+
+#### Global Network Firewall Policies
+
+Grouping of rules into a policy object applicable to all regions (global). After you associate a global network firewall policy with a VPC network, the rules in the policy can apply to resources in the VPC network.
+
+```
+gcloud compute network-firewall-policies create \
+    NETWORK_FIREWALL_POLICY_NAME
+    --description DESCRIPTION --global
+```
+
+```
+gcloud compute network-firewall-policies associations create \
+    --firewall-policy POLICY_NAME \
+    --network NETWORK_NAME \
+    [ --name ASSOCIATION_NAME ] \
+    --global-firewall-policy
+```
+
+
+#### Regional Network Firewall Policies
+
+Grouping of rules into a policy object applicable to a specific region. After you associate a regional network firewall policy with a VPC network, the rules in the policy can apply to resources within that region of the VPC network.
+
+**Creating a regional firewall policy and associate rule**
+```
+gcloud compute network-firewall-policies create \
+    NETWORK_FIREWALL_POLICY_NAME
+    --description DESCRIPTION \
+    --region=REGION_NAME
+```
+
+```
+gcloud compute network-firewall-policies associations create \
+    --firewall-policy POLICY_NAME \
+    --network NETWORK_NAME \
+    --name ASSOCIATION_NAME  \
+    --firewall-policy-region=REGION_NAME
+    [ --replace-association-on-target true ]
+```
+
+```
+gcloud compute network-firewall-policies rules create PRIORITY \
+    --action ACTION \
+    --firewall-policy POLICY_NAME \
+    [--description DESCRIPTION ]\
+    [--layer4-configs PROTOCOL_PORT] \
+    [--target-secure-tags TARGET_SECURE_TAG[,TARGET_SECURE_TAG,...]] \
+    [--target-service-accounts=SERVICE_ACCOUNT[,SERVICE_ACCOUNT,...]] \
+    [--direction DIRECTION]\
+    [--src-ip-ranges IP_RANGES] \
+    [--src-secure-tags SRC_SECURE_TAG[,SRC_SECURE_TAG,...]] \
+    [--dest-ip-ranges IP_RANGES] \
+    [--enable-logging | --no-enable-logging]\
+    [--disabled | --no-disabled]\
+    --firewall-policy-region=REGION_NAME
+```
+
+
+All _hierarchical_, _global_, and _regional_ firewall policies have four pre-defined goto_next rules with lowest priority. These rules are applied to any connections that do not match an explicitly defined rule in the policy, causing such connections to be passed down to lower-level policies or network rules.
+
+* IPv4 rules:
+  - An egress rule whose destination is 0.0.0.0/0, with very low priority (2147483646), that sends processing of the connection to the next lower level of evaluation (goto_next).
+  - An ingress rule whose source is 0.0.0.0/0, with a very low priority (2147483647), that sends processing of the connection to the next lower level of evaluation (goto_next).
+
+* IPv6 rules:
+  - An egress rule whose destination is ::/0, with very low priority (2147483644), that sends processing of the connection to the next lower level of evaluation (goto_next).
+
+  - An ingress rule whose source is ::/0, with a very low priority (2147483645), that sends processing of the connection to the next lower level of evaluation (goto_next).
+
+These pre-defined rules are visible, but cannot be modified or deleted. These rules are different from the implied and pre-populated rules of a VPC network.
+
+
+
+Order of evaluation of firewall policies:
+
+![order of evaluation](https://cloud.google.com/static/vpc/images/firewall-policies/hfw3-2.svg)
+
+
 </details>
 <details>
 <summary> 2.5 Implementing VPC Service Controls. </summary>
@@ -1520,19 +2163,485 @@ Adding authorized networks for cluster control plane endpoints
 <details>
 <summary> 3.1 Configuring load balancing. </summary>
 
-    ●  Backend services and network endpoint groups (NEGs)
 
-    ●  Firewall rules to allow traffic and health checks to backend services
+### Backend services and network endpoint groups (NEGs)
 
-    ●  Health checks for backend services and target instance groups
+**Backend Services**
+* Defines how Cloud Load Balancing distributes traffic.
+* Backend service configuration contains a set of values, such as the protocol used to connect to backends, various distribution and session settings, health checks, and timeouts. These settings provide fine-grained control over how your load balancer behaves. If you need to get started quickly, most of the settings have default values that allow for easy configuration. A backend service is either global or regional in scope.
+* Load balancers, Envoy proxies, and proxyless gRPC clients use the configuration information in the backend service resource to do the following:
+  - Direct traffic to the correct backends, which are instance groups or network endpoint groups (NEGs).
+  - Distribute traffic according to a balancing mode, which is a setting for each backend.
+  - Determine which health check is monitoring the health of the backends.
+  - Specify session affinity.
+  - Determine whether other services are enabled, including the following services that are only available for certain load balancers:
+    * Cloud CDN
+    * Google Cloud Armor security policies
+    * Identity-Aware Proxy
 
-    ●  Configuring backends and backend services with balancing method (e.g., RPS, CPU, Custom), session affinity, and capacity scaling/scaler
+You set these values when you create a backend service or add a backend to the backend service.
 
-    ●  TCP and SSL proxy load balancers
+**Network Endpoint Groups (NEGs)**
 
-    ●  Load balancers (e.g., External TCP/UDP Network Load Balancing, Internal TCP/UDP Load Balancing, External HTTP(S) Load Balancing, Internal HTTP(S) Load Balancing)
+A network endpoint group (NEG) is a configuration object that specifies a group of backend endpoints or services. A common use case for this configuration is deploying services in containers. You can also distribute traffic in a granular fashion to applications running on your backend instances.
 
-    ●  Protocol forwarding
+You can use NEGs as backends for some load balancers and with Traffic Director.
+
+Types of NEGs:
+
+**Zonal NEG**:
+  - One or more internal IP address endpoints that resolve to either Compute Engine VM instances or GKE Pods.
+  - _GCE_VM_IP_:
+    * IP only: resolves to the primary internal IP address of a Compute Engine VM's NIC
+    * Only be use by internal TCP/UDP Load balancers
+  - _GCE_VM_IP_PORT_:
+    * IP:Port: resolves to either the primary internal IP address of a Google Cloud VM's NIC or an alias IP address on a NIC; for example, Pod IP addresses in VPC-native clusters.
+    * Used by HTTP(S) , SSL Proxy , External & internal regional TCP Proxy
+  - Scope is zonal
+  - Can have 1 or more endpoints
+  - Centralized health checks for NEGs with GCE_VM_IP_PORT and GCE_VM_IP endpoints.
+  - Routing is VPC Network only
+  - Type of services that use Zonal Negs:
+    - Internal TCP/UDP Load Balancing (GCE_VM_IP endpoints):
+      * Set up zonal NEGs for internal TCP/UDP load balancers
+    - Internal regional TCP proxy load balancer (GCE_VM_IP_PORT endpoints)
+      * Set up zonal NEGs for internal regional TCP proxy load balancers
+    - Internal HTTP(S) Load Balancing (GCE_VM_IP_PORT endpoints)
+    - Global external HTTP(S) load balancer (GCE_VM_IP_PORT endpoints)
+    - Global external HTTP(S) load balancer (classic) (GCE_VM_IP_PORT endpoints)
+    - Regional external HTTP(S) load balancer (GCE_VM_IP_PORT endpoints)
+    - External TCP Proxy Load Balancing (GCE_VM_IP_PORT endpoints)
+    - External SSL Proxy Load Balancing (GCE_VM_IP_PORT endpoints)
+    - Traffic Director (GCE_VM_IP_PORT endpoints)
+
+Creating a Zonal NEG use the following gcloud command:
+
+```
+gcloud compute network-endpoint-groups create NEG_NAME \
+    --zone=ZONE \
+    --network=NETWORK
+    [--subnet=SUBNET]
+    [--default-port=DEFAULT_PORT]
+```
+
+Use the `--network-endpoint-type` flag to set the type of endpoint either _GCE_VM_IP_ or _GCE_VM_IP_PORT_.
+
+Run the following to add addtional endpoints to a Zonal NEG, this is only supported by _GCE_VM_IP_PORT_ type:
+
+```
+gcloud compute network-endpoint-groups update NEG_NAME \
+    --zone=ZONE \
+    --add-endpoint 'instance=INSTANCE_NAME,[ip=IP_ADDRESS],[port=PORT]' \
+    [--add-endpoint ...]
+```
+
+Ex:
+```
+gcloud compute network-endpoint-groups update my-lb-neg \
+    --zone=asia-southeast1-a
+    --add-endpoint 'instance=my-vm1,ip=10.1.1.1,port=80' \
+```
+
+Add the NEG to a backend service:
+
+```
+gcloud compute backend-services add-backend BACKEND_SERVICE \
+     --network-endpoint-group=NETWORK_ENDPOINT_GROUP \
+     --network-endpoint-group-zone=ZONE
+```
+
+ex:
+```
+gcloud compute backend-services add-backend my-lb \
+   --network-endpoint-group my-lb-neg \
+   --network-endpoint-group-zone=asia-southeast1-a \
+   --global \
+   --balancing-mode=RATE \
+   --max-rate-per-endpoint=5
+```
+
+**Internet NEG**:
+
+* A single internet-routable endpoint that is hosted outside of Google Cloud.
+* Type:
+  - _INTERNET_IP_PORT_ : IP:Port, where IP must not be a RFC 1918 address.
+  - _INTERNET_FQDN_PORT_:
+      - Fully Qualified Domain Name (FQDN):Port
+      - When using HTTPS or HTTP/2 as the backend protocol, we strongly recommend that you use INTERNET_FQDN_PORT to create your external backend.
+* A single endpoint is supported
+* Scope is global
+* Routing is over the internet
+* Health Check not supported
+* Google Products that can use:
+  - Cloud CDN (INTERNET_IP_PORT or INTERNET_FQDN_PORT endpoint)
+  - Global external HTTP(S) load balancer (classic) (INTERNET_IP_PORT or INTERNET_FQDN_PORT endpoint):
+    - Internet NEGs are not supported with the global external HTTP(S) load balancer or the regional external HTTP(S) load balancer.
+  - Traffic Director (INTERNET_FQDN_PORT endpoint)
+
+Creating an internet NEG using gcloud:
+
+```
+gcloud compute network-endpoint-groups create NEG_NAME \
+    --network-endpoint-type=ENDPOINT_TYPE --global
+
+gcloud compute network-endpoint-groups update NEG_NAME \
+  --add-endpoint="fqdn=backend.example.com,port=443" \
+  --global
+```
+
+`-network-endpoint-type` can be either _INTERNET_IP_PORT_ or _INTERNET_FQDN_PORT_.
+
+**Serverless NEG**:
+
+* A single endpoint within Google's network that resolves to an App Engine, Cloud Functions, API Gateway, or Cloud Run service.
+* Type:
+  - _SERVERLESS_: FQDN belonging to an App Engine, Cloud Functions, API Gateway, or Cloud Run service.
+* Supports a single endpoint
+* Scope is regional
+* Routing is to Google APIs and services
+* Health Check not supported
+* Google Products that use this NEG
+  - Global external HTTP(S) load balancer and global external HTTP(S) load balancer (classic): Cloud Run, App Engine, and Cloud Functions are supported.
+  - Regional external HTTP(S) load balancer (Preview): Only Cloud Run is supported.
+  - Internal HTTP(S) load balancer (Preview): Only Cloud Run is supported.
+
+Creating an internet NEG using gcloud:
+
+```
+gcloud compute network-endpoint-groups create SERVERLESS_NEG_NAME \
+    --region=REGION \
+    --network-endpoint-type=serverless  \
+    --cloud-run-service=CLOUD_RUN_SERVICE_NAME
+```
+
+
+**Hybrid connectivity NEG**:
+
+Public Facing Clients:
+
+![Hybrid connectivity (public)](https://cloud.google.com/static/load-balancing/images/ext-https-hybrid.svg)
+
+Private Facing clients:
+![Hybrid over IAP](https://cloud.google.com/static/load-balancing/images/int-https-hybrid.svg)
+
+
+* One or more endpoints that resolve to on-premises services, server applications in another cloud, and other internet-reachable services outside Google Cloud.
+* Type:
+  - _NON_GCP_PRIVATE_IP_PORT_:
+    - IP:Port belonging to a VM that is not in Compute Engine and that must be routable using hybrid connectivity.
+* Supports multiple endpoints
+* Health Checks:
+  - Centralized health checks when you use this NEG with a supported load balancing product.
+  - Distributed Envoy health checks for NEGs used with Traffic Director
+  - Currently, health check probes for hybrid NEGs originate from Google's centralized health checking mechanism. If you cannot allow traffic that originates from the Google health check ranges to reach your hybrid endpoints and would prefer to have the health check probes originate from private IP addresses instead, speak to your Google account representative to get your project allowlisted for distributed Envoy health checks.
+* Scope is zonal
+* Route is to an on-premises network or another Cloud provider network by way of Cloud Interconnect VLAN attachment, Cloud VPN tunnel, or Router appliance VM in a VPC network
+* Google products that use this NEG:
+  - External HTTP(S) Load Balancing
+  - Internal HTTP(S) Load Balancing
+  - External TCP Proxy Load Balancing
+  - External SSL Proxy Load Balancing
+  - Internal Regional TCP Proxy Load Balancing
+  - Traffic Director
+
+gcloud:
+
+```
+gcloud compute network-endpoint-groups create ON_PREM_NEG_NAME \
+    --network-endpoint-type=NON_GCP_PRIVATE_IP_PORT \
+    --zone=ON_PREM_NEG_ZONE \
+    --network=NETWORK
+```
+
+**Private Service Connect NEG**:
+
+* A single endpoint that resolves to one of the following:
+  - A Google-managed regional API endpoint
+  - A managed service published using Private Service Connect
+* Type:
+  - _PRIVATE_SERVICE_CONNECT_
+* Single endpoint is supported
+* Health Checks are not supported
+* Scope is regional
+* Routing:
+  - Internal HTTP(S) Load Balancing:
+    - To Google APIs and services
+  - External HTTP(S) Load Balancing:
+    - VPC network
+* GCP Products that use this neg:
+  - Internal regional TCP proxy load balancer
+    - Use Private Service Connect to publish services using internal IP addresses in your VPC network
+  - Internal HTTP(S) Load Balancing:
+    - Access Google APIs using Private Service Connect with consumer HTTP(S) service controls
+  - Global external HTTP(S) load balancer:
+    - Access managed services using Private Service Connect with consumer HTTP(S) service controls
+  - Private Service Connect NEGs are not supported by the global external HTTP(S) load balancer (classic).
+  - Regional external HTTP(S) load balancer
+
+
+
+## Firewall rules to allow traffic and health checks to backend services
+
+**Global External HTTPs LB Regular and Classic**
+* Health check ranges:
+  - _35.191.0.0/16_
+  - _130.211.0.0/22_
+* GFE proxy ranges:
+  - **Regular**: Same as health check ranges
+  - **Classic**:
+    - Same as health check ranges if the backends are instance groups, zonal NEGs (GCE_VM_IP_PORT), or hybrid connectivity NEGs (_NON_GCP_PRIVATE_IP_PORT_)
+    - _34.96.0.0/20_ and _34.127.192.0/18_ for Internet NEG backends (_INTERNET_FQDN_PORT_ and _INTERNET_IP_PORT_)
+
+Example:
+
+```
+gcloud compute firewall-rules create fw-allow-health-check \
+    --network=default \
+    --action=allow \
+    --direction=ingress \
+    --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+    --target-tags=allow-health-check \
+    --rules=tcp:80
+```
+
+**Regional external HTTP(S) load balancer, Internal HTTP(S) load balancer, and Internal regional TCP proxy load balancer**
+* Health check ranges
+  - _35.191.0.0/16_
+  - _130.211.0.0/22_
+* Currently, health check probes for hybrid NEGs originate from Google's centralized health checking mechanism. If you cannot allow traffic that originates from the Google health check ranges to reach your hybrid endpoints and would prefer to have the health check probes originate from private IP addresses instead, speak to your Google account representative to get your project allowlisted for distributed Envoy health checks.
+* Proxy-only subnet:
+  - provides a set of IP addresses that Google uses to run Envoy proxies on your behalf. The proxies terminate connections from the client and create new connections to the backends.
+  - is used by all Envoy-based regional load balancers in the same region of the lb-network VPC network. There can only be one active proxy-only subnet per region, per network.
+
+Example:
+
+```
+gcloud compute networks subnets create proxy-only-subnet \
+  --purpose=REGIONAL_MANAGED_PROXY \
+  --role=ACTIVE \
+  --region=us-west1 \
+  --network=lb-network \
+  --range=10.129.0.0/23
+
+gcloud compute firewall-rules create fw-allow-health-check \
+      --network=lb-network \
+      --action=allow \
+      --direction=ingress \
+      --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+      --target-tags=load-balanced-backend \
+      --rules=tcp
+
+gcloud compute firewall-rules create fw-allow-proxy-only-subnet \
+          --network=lb-network \
+          --action=allow \
+          --direction=ingress \
+          --source-ranges=10.129.0.0/23 \
+          --target-tags=allow-proxy-only-subnet \
+          --rules=tcp:80
+```
+
+**Internal TCP/UDP load balancer**
+* Health check ranges
+  - _35.191.0.0/16_
+  - _130.211.0.0/22_
+  - Internal source IP addresses of clients
+
+Example:
+
+```
+gcloud compute firewall-rules create fw-allow-lb-access \
+    --network=lb-network \
+    --action=allow \
+    --direction=ingress \
+    --source-ranges=10.1.2.0/24,10.3.4.0/24 \
+    --rules=tcp,udp,icmp
+```
+
+**External SSL and TCP proxy load balancer**
+* Health check ranges
+  - _35.191.0.0/16_
+  - _130.211.0.0/22_
+* GFE proxy ranges: Same as health check ranges
+
+Example
+```
+gcloud compute firewall-rules create allow-ssl-lb-and-health \
+   --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+   --target-tags=ssl-lb \
+   --allow=tcp:443
+
+gcloud compute firewall-rules create allow-tcp-lb-and-health \
+      --source-ranges 130.211.0.0/22,35.191.0.0/16 \
+      --target-tags tcp-lb \
+      --allow tcp:110
+```
+
+**Network load balancer**
+* Health check ranges
+  - For IPv4 traffic to the backends:
+    - _35.191.0.0/16_
+    - _209.85.152.0/22_
+    - _209.85.204.0/22_
+  - For IPv6 traffic to the backends:
+    - _2600:1901:8001::/48_
+* External source IP addresses of clients on the internet.
+For example, _0.0.0.0/0 (all IPv4 clients)_ or _::/0 (all IPv6 clients)_ or a specific set of IP address ranges.
+
+
+
+## Health checks for backend services and target instance groups
+
+Google Cloud health checks are implemented by dedicated software tasks that connect to backends according to parameters specified in a health check resource. Each connection attempt is called a probe. Google Cloud records the success or failure of each probe.
+
+Based on a configurable number of sequential successful or failed probes, an overall health state is computed for each backend. Backends that respond successfully for the configured number of times are considered healthy. Backends that fail to respond successfully for a separately configurable number of times are unhealthy.
+
+The overall health state of each backend determines eligibility to receive new requests or connections. You can configure the criteria that define a successful probe. This is discussed in detail in the section How health checks work.
+
+Health checks implemented by dedicated software tasks use special routes that aren't defined in your Virtual Private Cloud (VPC) network. For more information, see Load balancer return paths.
+
+**Creating Health Checks**
+
+```
+gcloud compute health-checks create PROTOCOL NAME \
+    --global | --region=REGION \
+    --description=DESCRIPTION \
+    --check-interval=CHECK_INTERVAL \
+    --timeout=TIMEOUT \
+    --healthy-threshold=HEALTHY_THRESHOLD \
+    --unhealthy-threshold=UNHEALTHY_THRESHOLD \
+    PORT_SPECIFICATION \
+    ADDITIONAL_FLAGS
+```
+
+Replace the following:
+
+* _PROTOCOL_ defines the protocol used for the health check. Valid options are `grpc`, `http`, `https`, `http2`, `ssl`, and `tcp`.
+* _NAME_ is the name of the health check. Within a given project: Each global health check must have a unique name, and regional health checks must have unique names within a given region.
+* _REGION_: All load balancers except for regional external HTTP(S) load balancers and internal HTTP(S) load balancers use global health checks (--global). Internal HTTP(S) load balancers use regional health checks whose region must match the region of the backend service.
+* _DESCRIPTION_ is an optional description.
+* _CHECK_INTERVAL_ is the amount of time from the start of one health check probe system's connection to the start of the next one. Units are seconds. If omitted, Google Cloud uses a value of 5s (5 seconds).
+* _TIMEOUT_ is the amount of time that Google Cloud waits for a response to a probe. The value of TIMEOUT must be less than or equal to the CHECK_INTERVAL. Units are seconds. If omitted, Google Cloud uses a value of 5s (5 seconds).
+* _HEALTHY_THRESHOLD_ and _UNHEALTHY_THRESHOLD_ specify the number of sequential probes that must succeed or fail for the VM instance to be considered healthy or unhealthy. If either is omitted, Google Cloud uses a default threshold of 2.
+* _PORT_SPECIFICATION_: Defines the port specification using one of the Port specification flags.
+* _ADDITIONAL_FLAGS_ are other flags for specifying ports and options specific to the _PROTOCOL_. See [Additional flags for HTTP, HTTPS, and HTTP/2 health checks](https://cloud.google.com/load-balancing/docs/health-checks#optional-flags-hc-protocol-http), [Additional flags for SSL and TCP health checks](https://cloud.google.com/load-balancing/docs/health-checks#optional-flags-hc-protocol-ssl-tcp), or [Additional flag for gRPC health checks](https://cloud.google.com/load-balancing/docs/health-checks#optional-flags-hc-protocol-grpc).
+
+
+
+## Configuring backends and backend services with balancing method (e.g., RPS, CPU, Custom), session affinity, and capacity scaling/scaler
+
+
+## Load balancers
+
+There are several options for load balancing traffic in GCP, divided into two categories:
+
+*   **External Load Balancer**
+  -   Distributes traffic from the internet to a VPC
+*   **Internal Load Balancer**
+  -   Distributes traffic between instances in a VPC
+
+GCP Load Balancers are divided into **Global** and **Regional** categories.
+
+*   **Global**
+  -    External HTTP(S) LB
+  -    SSL Proxy LB
+  -    TCP Proxy LB
+  -    TCP/UDP Network LB
+*   **Regional**
+  -    Internal TCP/UDP Network LB
+  -    Internal HTTP(s) LB
+
+The following image outlines a decision tree on how to choose the appropriate Load Balancer for your workloads.
+
+![GCP LB Decision Tree](https://cloud.google.com/static/load-balancing/images/choose-lb.svg)
+
+## Forwarding Rules (Protocol forwarding)
+
+Compute Engine supports protocol forwarding, which lets you create forwarding rule objects that can send packets to target instances that do not have a NAT policy applied to them. Each target instance contains a single virtual machine (VM) instance that receives and handles traffic from the corresponding forwarding rules.
+
+Protocol forwarding can be used in a number of scenarios, including:
+
+* **External protocol forwarding**:
+  - You can set up multiple forwarding rules to point to a single target instance, allowing you to use multiple external IP addresses with one VM instance. You can use this in scenarios where you may want to serve data from just one VM instance, but through different external IP addresses, or different protocols and ports. This is especially useful for setting up SSL virtual hosting. You can also switch regional forwarding rules from using target instances to backend services and vice versa.
+  - Supports the following protocols:
+    - `AH`: Specifies the IP Authentication Header protocol.
+    - `ESP`: Specifies the IP Encapsulating Security Payload protocol.
+    - `ICMP`: Specifies the Internet Control Message Protocol.
+    - `SCTP`: Specifies the Stream Control Transmission Protocol.
+    - `TCP`: Specifies the Transmission Control Protocol.
+    - `UDP`: Specifies the User Datagram Protocol.
+
+* **Virtual private networks (VPN)**
+- Supports the following protocols:
+  - `AH`: Specifies the IP Authentication Header protocol.
+  - `ESP`: Specifies the IP Encapsulating Security Payload protocol.
+  - `ICMP`: Specifies the Internet Control Message Protocol.
+  - `SCTP`: Specifies the Stream Control Transmission Protocol.
+  - `TCP`: Specifies the Transmission Control Protocol.
+  - `UDP`: Specifies the User Datagram Protocol.
+
+
+
+* **Internal protocol forwarding**:
+  - You can use protocol forwarding for internal regional forwarding rules with VPC subnet ranges. Use this feature to configure internal forwarding rules that send TCP or UDP traffic to a target instance in the same region. You can also switch internal regional forwarding rules from using target instances to backend services and vice versa.
+  -   - Supports the following protocols:
+      - `TCP`: Specifies the Transmission Control Protocol.
+      - `UDP`: Specifies the User Datagram Protocol.
+
+
+  Creating a forwarding rule:
+
+  ```
+  gcloud compute forwarding-rules create NAME
+       (--backend-service=BACKEND_SERVICE
+         | --target-google-apis-bundle=TARGET_GOOGLE_APIS_BUNDLE
+         | --target-grpc-proxy=TARGET_GRPC_PROXY
+         | --target-http-proxy=TARGET_HTTP_PROXY
+         | --target-https-proxy=TARGET_HTTPS_PROXY
+         | --target-instance=TARGET_INSTANCE | --target-pool=TARGET_POOL
+         | --target-service-attachment=TARGET_SERVICE_ATTACHMENT
+         | --target-ssl-proxy=TARGET_SSL_PROXY
+         | --target-tcp-proxy=TARGET_TCP_PROXY
+         | --target-vpn-gateway=TARGET_VPN_GATEWAY) [--allow-global-access]
+       [--description=DESCRIPTION] [--ip-protocol=IP_PROTOCOL]
+       [--is-mirroring-collector]
+        [--load-balancing-scheme=LOAD_BALANCING_SCHEME] [--network=NETWORK]
+        [--network-tier=NETWORK_TIER]
+        [--service-directory-registration=SERVICE_DIRECTORY_REGISTRATION]
+        [--service-label=SERVICE_LABEL] [--subnet=SUBNET]
+        [--subnet-region=SUBNET_REGION]
+        [--target-instance-zone=TARGET_INSTANCE_ZONE]
+        [--target-pool-region=TARGET_POOL_REGION]
+        [--target-service-attachment-region=TARGET_SERVICE_ATTACHMENT_REGION]
+        [--target-vpn-gateway-region=TARGET_VPN_GATEWAY_REGION]
+        [--address=ADDRESS | --ip-version=IP_VERSION]
+        [--address-region=ADDRESS_REGION | --global-address]
+        [--backend-service-region=BACKEND_SERVICE_REGION
+          | --global-backend-service] [--global | --region=REGION]
+        [--global-target-http-proxy
+          | --target-http-proxy-region=TARGET_HTTP_PROXY_REGION]
+        [--global-target-https-proxy
+          | --target-https-proxy-region=TARGET_HTTPS_PROXY_REGION]
+        [--port-range=[PORT | START_PORT-END_PORT] | --ports=ALL | [PORT
+          | START_PORT-END_PORT],[...]] [GCLOUD_WIDE_FLAG ...]
+  ```
+
+Examples:
+
+To create a global forwarding rule that will forward all traffic on port 8080 for IP address ADDRESS to a target http proxy PROXY, run:
+
+```
+$ gcloud compute forwarding-rules create RULE_NAME --global \
+    --target-http-proxy=PROXY --ports=8080 --address=ADDRESS
+```
+
+To create a regional forwarding rule for the subnet SUBNET_NAME on the default network that will forward all traffic on ports 80-82 to a backend service SERVICE_NAME, run:
+
+```
+$ gcloud compute forwarding-rules create RULE_NAME \
+           --load-balancing-scheme=INTERNAL \
+           --backend-service=SERVICE_NAME --subnet=SUBNET_NAME \
+           --network=default --region=REGION --ports=80-82
+```
 
     ●  Accommodating workload increases using autoscaling vs. manual scaling
 </details>
@@ -1548,15 +2657,194 @@ Adding authorized networks for cluster control plane endpoints
 <details>
 <summary> 3.3 Configuring Cloud CDN. </summary>
 
-    ●  Enabling and disabling
+## Cloud CDN
 
-    ●  Cloud CDN
+Cloud CDN works with external HTTP(S) Load Balancing to deliver content to your users. The external HTTP(S) load balancer provides the frontend IP addresses and ports that receive requests and the backends (or origins) that respond to the requests.
 
-    ●  Cache keysInvalidating cached objects
+Cloud CDN content can be sourced from various types of backends:
+  * Instance groups
+    - [Set up Cloud CDN with Managed Instance Groups](https://cloud.google.com/cdn/docs/setting-up-cdn-with-mig)
+  * Zonal network endpoint groups (NEGs)
+    - [Set up Cloud CDN with NEGs](https://cloud.google.com/cdn/docs/set-up-external-backend-internet-neg)
+  * Serverless NEGs: One or more App Engine, Cloud Run, or Cloud Functions services
+    - [Setup cloud cdn with severless negs](https://cloud.google.com/cdn/docs/setting-up-cdn-with-serverless)
+  * Internet NEGs for external backends
+    - [Setup](https://cloud.google.com/cdn/docs/set-up-external-backend-internet-neg)
+  * Buckets in Cloud Storage
+    - [Setup with GCS](https://cloud.google.com/cdn/docs/setting-up-cdn-with-bucket)
+    - [Setup with third-party storage](https://cloud.google.com/cdn/docs/setting-up-cdn-with-third-party-storage)
 
-    ●  Signed URLs
+## Enabling and disabling
+Cloud CDN can be enabled for many different types of content, either static or dynamic, from the following categories:
+* Compute Engine instance groups
+* Network Endpoint Groups (NEGs)
+* Cloud Storage buckets
 
-    ●  Custom origins
+Enabling through an HTTPS Load Balancer you must set the _Cache Mode_ which by default, Cloud CDN will cache static content - including web assets and video files - that are not explicitly marked as private for the configured default time to live (TTL), without requiring any changes at your origin.
+
+You can also choose to _Use origin settings based on Cache-Control headers_ in which _Origin_ must set headers or you can choose to _Force cache all content_. With _Force call all content_, CDN will cache all content served by the origin, ignoring any "private", "no-store" or "no-cache" directives.
+
+If you decide to use the Cache-Control headers, Cloud CDN will only cache responses with valid cache directives contained in the HTTP response header. A full list of available directives can be found in the [Cloud CDN documentation](https://cloud.google.com/cdn/docs/caching?_ga=2.146230836.-1066977515.1628720034#cache_control_directives.)
+
+You also specify the TTL (Time to Live):
+* Client time to live --> defaults to 1 hour
+* Default time to live --> defaults to 1 hour
+* Maximum time to live --> defaults to 1 day
+
+
+Use the `--enable-cdn` and  `--cache-mode=CACHE_MODE` on the `gcloud compute backend-services create | update` command.
+
+_CACHE_MODE_ can be one of the following:
+
+* **CACHE_All_STATIC**: Automatically caches static content.
+* **USE_ORIGIN_HEADERS** (default): Requires the origin to set valid caching headers to cache content.
+* **FORCE_CACHE_ALL**: Caches all content, ignoring any private, no-store, or no-cache directives in Cache-Control response headers.
+
+
+
+Other optional flags :
+* `--no-cache-key-include-protocol`
+* `--no-cache-key-include-host`
+* `--no-cache-key-include-query-string`
+
+If using GKE you can setup ingress using a BackendConfig manifest to enable caching with Cloud CDN:
+
+```
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: my-backendconfig
+spec:
+  cdn:
+    enabled: CDN_ENABLED
+    cachePolicy:
+      includeHost: INCLUDE_HOST
+      includeProtocol: INCLUDE_PROTOCOL
+      includeQueryString: INCLUDE_QUERY_STRING
+      queryStringBlacklist: QUERY_STRING_DENYLIST
+      queryStringWhitelist: QUERY_STRING_ALLOWLIST
+    cacheMode: CACHE_MODE
+    clientTtl: CLIENT_TTL
+    defaultTtl: DEFAULT_TTL
+    maxTtl: MAX_TTL
+    negativeCaching: NEGATIVE_CACHING
+    negativeCachingPolicy:
+      code: NEGATIVE_CACHING_CODE
+      ttl: NEGATIVE_CACHING_TTL
+    requestCoalescing: REQ_COALESCING
+    serveWhileStale: SERVE_WHILE_STALE
+    signedUrlCacheMaxAgeSec: SIGNED_MAX_AGE
+    signedUrlKeys:
+      keyName: KEY_NAME
+      keyValue: KEY_VALUE
+      secretName: SECRET_NAME
+```
+
+To disable Cloud CDN use the following:
+
+```
+gcloud compute backend-services | backend-buckets update BACKEND_SERVICE_NAME \
+    --no-enable-cdn
+```
+
+
+## Cache keys
+By default, backend services configured to use Cloud CDN include all components of the request URI in cache keys.
+
+Use the following flags:
+
+* `--cache-key-include-protocol`
+* `--cache-key-include-host`
+* `--cache-key-include-query-string`
+
+Examples can be found [here](https://cloud.google.com/cdn/docs/using-cache-keys).
+
+## Invalidating cached objects
+
+Example:
+```
+gcloud compute url-maps invalidate-cdn-cache LOAD_BALANCER_NAME \
+    --path "/images/*"
+```
+
+More examples to invalidate cache can be found [here](https://cloud.google.com/cdn/docs/invalidating-cached-content)
+
+## Secure access control
+
+Cloud CDN signed URLs and signed cookies let you serve responses from Google Cloud's globally distributed caches, even when you need requests to be authorized.
+
+Signed URLs and signed cookies achieve similar goals: they both control access to your cached content. If you want to serve content from Google Cloud's globally distributed caches, and you're deciding between signed URLs or signed cookies, consider the following use case comparison.
+
+### Signed URLs
+
+A signed URL is a URL that provides limited permission and time to make a request.
+
+Use signed URLs in the following cases:
+* You need to restrict access to individual files, such as an installation download.
+* Your users are using client applications that don't support cookies.
+
+You need create a crytographic key and attach it to the backend service or backend bucket:
+
+```
+gcloud compute backend-services \
+   add-signed-url-key BACKEND_NAME \
+   --key-name KEY_NAME \
+   --key-file KEY_FILE_NAME
+
+gcloud compute backend-buckets \
+      add-signed-url-key BACKEND_NAME \
+      --key-name KEY_NAME \
+      --key-file KEY_FILE_NAME
+```
+
+Use the  `--signed-url-cache-max-age MAX_AGE` to set the maximum cache age
+Use the `--expires-in=TIME` to set an experation for the cache
+
+If your using a restricted Cloud Storage bucket you must provide CLoud CDN permission to view the objects:
+
+```
+gsutil iam ch \
+  serviceAccount:service-PROJECT_NUM@cloud-cdn-fill.iam.gserviceaccount.com:objectViewer \
+  gs://BUCKET
+```
+### Signed Cookies
+
+A signed cookie is a cookie that provides limited permission and time to make requests for a set of files.
+
+Use cases
+* Use signed cookies in the following cases:
+* You need to provide access to multiple restricted files.
+* You want to avoid changing your current URLs.
+* You want to avoid updating URLs each time you refresh authorization to access content.
+
+Setting up and using signed cookies --> [here](https://cloud.google.com/cdn/docs/using-signed-cookies#console)
+
+
+## Custom origins
+
+You can also specify custom origins using `--custom-request-header` flag, as shown in the following example:
+
+```
+gcloud compute backend-services update images \
+   --custom-request-header "Host: backend.example.com" --global
+```
+
+Then specify a url-map
+
+```
+gcloud compute url-maps add-path-matcher EXAMPLE_URL_MAP \
+  --default-service=GCP_SERVICE_EXAMPLE \
+  --path-matcher-name=CUSTOM_ORIGIN_PATH_MATCHER_EXAMPLE \
+  --backend-service-path-rules=/CART/ID/1223515=IMAGES
+```
+
+
+## Media CDN
+Media CDN is Google Cloud's media delivery CDN platform that complements Cloud CDN. Media CDN is optimized for high-throughput egress workloads such as streaming video and large file downloads.
+
+The use cases outlined [here](https://cloud.google.com/media-cdn/docs/choose-cdn-product) will help decide which CDN product best fits the scenerio.
+
+
 </details>
 <details>
 <summary> 3.4 Configuring and maintaining Cloud DNS. </summary>
@@ -1580,15 +2868,232 @@ Adding authorized networks for cluster control plane endpoints
 <details>
 <summary> 3.5 Configuring Cloud NAT. </summary>
 
-    ●  Addressing
+## Cloud NAT
 
-    ●  Port allocations
+Cloud NAT is a distributed, software-defined managed service. It's not based on proxy VMs or appliances. Cloud NAT configures the [Andromeda software](https://cloudplatform.googleblog.com/2014/04/enter-andromeda-zone-google-cloud-platforms-latest-networking-stack.html) that powers your Virtual Private Cloud (VPC) network so that it provides source network address translation (source NAT or SNAT) for VMs without external IP addresses. Cloud NAT also provides destination network address translation (destination NAT or DNAT) for established inbound response packets.
 
-    ●  Customizing timeouts
+Cloud NAT embeds Cloud Router to route outbound traffic out of one GCP region. It is a regional service and works in a fully distributed manner as it is a software-defined network (SDN) component
 
-    ●  Logging and monitoring
+![Cloud NAT](images/cloud-nat.png)
 
-    ●  Restrictions per organization policy constraints
+![Traditional NAT vs Cloud NAT](https://cloud.google.com/static/nat/images/07.svg)
+
+Cloud NAT implements outbound NAT in conjunction with static routes in your VPC network whose next hops are the default internet gateway. In a basic configuration, a default route in your VPC network meets this requirement.
+
+Cloud NAT does not implement unsolicited inbound connections from the internet. DNAT is only performed for packets that arrive as responses to outbound packets.
+
+**Configure CLOUD NAT**
+
+```
+gcloud compute routers nats create NAT_CONFIG \
+   --router=NAT_ROUTER \
+   --region=REGION \
+   --auto-allocate-nat-external-ips \
+   --nat-all-subnet-ip-ranges \
+   --enable-logging \
+   [--nat-external-ip-pool=IP_ADDRESS1,IP_ADDRESS2] \
+   [--enable-dynamic-port-allocation] \
+   [--min-ports-per-vm=MIN_PORTS ] \
+   [--max-ports-per-vm=MAX_PORTS ] \
+   [--nat-custom-subnet-ip-ranges=SUBNET_IP_RANGE_LIST]
+   [--udp-idle-timeout=60s] \
+   [--tcp-established-idle-timeout=60s] \
+   [--tcp-transitory-idle-timeout=60s]\
+   [--tcp-time-wait-timeout=60s] \
+   [--icmp-idle-timeout=60s] \
+   [--enable-endpoint-independent-mapping | --no-enable-endpoint-independent-mapping]
+```
+
+Replace the following:
+
+* _NAT_CONFIG_: the name of your NAT configuration.
+* _NAT_ROUTER_: the name of your Cloud Router.
+* _REGION_: the region of the NAT to create. If not specified, you might be prompted to select a region (interactive mode only).
+* _SUBNET_IP_RANGE_LIST_: a comma-separated list of subnet names. For example:
+  - SUBNET_NAME_1,SUBNET_NAME_2: includes only the primary subnet range of SUBNET_NAME_1 and SUBNET_NAME_2.
+  - SUBNET_NAME:SECONDARY_RANGE_NAME: includes the secondary range SECONDARY_RANGE_NAME of subnet SUBNET_NAME. It does not include the primary range of SUBNET_NAME.
+  - SUBNET_NAME_1,SUBNET_NAME_2:SECONDARY_RANGE_NAME: includes the primary range of SUBNET_NAME_1 and the specified secondary range SECONDARY_RANGE_NAME of subnet SUBNET_NAME_2.
+* OPTIONAL:
+  - `--nat-external-ip-pool=[IP_ADDR1,IP_ADDR_2]`: static reserved external IP address(es) to use for NAT.
+  - `--enable-dynamic-port-allocation`: required for dynamic port allocation
+  - `--min-ports-per-vm`: the minimum number of ports to allocate for each VM. If dynamic port allocation is turned on, MIN_PORTS must be a power of 2, and can be between 32 and 32768. Default is 32.
+  - `--max-ports-per-vm`: the maximum number of ports to allocate for each VM. MAX_PORTS must be a power of 2, and can be between 64 and 65536. MAX_PORTS must be greater than MIN_PORTS. Default is 65536.
+  - `--udp-idle-timeout`: timeout in secs
+  - `--tcp-established-idle-timeout`: timeout in secs
+  - `--tcp-transitory-idle-timeout`: timeout in secs
+  - `--tcp-time-wait-timeout`: timeout in secs
+  - `--icmp-idle-timeout`: timeout in secs
+
+Endpoint-Idependdent Mapping (_--enable-endpoint-independent-mapping_ | _--no-enable-endpoint-independent-mapping_ ) option means that if a VM sends packets from a given internal IP address and port pair to multiple different destinations, then the gateway maps all of those packets to the same NAT IP address and port pair, regardless of the destination of the packets. Its purpose is to improve port utilization. By default its disabled.
+
+Cloud NAT supports Endpoint-Independent Mapping and Endpoint-Dependent Filtering as defined in RFC 5128. You can enable or disable Endpoint-Independent Mapping (_--enable-endpoint-independent-mapping_ | _--no-enable-endpoint-independent-mapping_ ). By default, Endpoint-Independent Mapping is disabled when you create a NAT gateway.
+
+_Endpoint-Dependent Filtering_ means that response packets from the internet are allowed to enter only if they are from an IP address and port that a VM had already sent packets to. The filtering is endpoint-dependent regardless of Endpoint Mapping type. This feature is always on and not user configurable.
+
+## NAT flow
+
+![NAT Flow](https://cloud.google.com/static/nat/images/02.svg)
+
+See --> https://cloud.google.com/nat/docs/ports-and-addresses#snat-flow-example
+
+
+## IP Addressing
+
+A NAT IP address is a regional external IP address, routable on the internet. A VM without an external IP address, in a subnetwork (subnet) served by a Cloud NAT gateway, uses a NAT IP address when it sends packets to a destination on the internet.
+
+To assign NAT IP addresses to a Cloud NAT gateway, use one of the following methods:
+
+**Automatic NAT IP address allocation**
+* Default option
+* Cloud NAT automatically adds regional external IP addresses to the gateway based on the number of VMs that use it and the number of ports reserved for each VM.
+* Automatically removes the IP address when it no longer needs any source ports
+* When a Cloud NAT gateway adds a NAT IP address, it creates a static (reserved) regional external IP address.
+* Cannot predict the next IP address that is allocated
+* If you switch to manual NAT IP address assignment later, the automatically reserved regional external IP addresses are deleted.
+
+**Manual NAT IP address assignment**
+* You create and manually assign static (reserved) regional external IP addresses to your Cloud NAT gateway. You can increase or decrease the number of manually assigned NAT IP addresses by editing the Cloud NAT gateway.
+* You must calculate the number of regional external IP addresses that you need for the Cloud NAT gateway.
+* If your gateway runs out of NAT IP addresses, Cloud NAT drops packets.
+* Removing NAT IP address immediately brakes established NAT connections
+* you can _drain_ manually assigned NAT IP addresses instead of removing them, _draining_ instructs the Cloud NAT gateway to stop using the NAT IP address for new connections but continue using it for established connections. Established connections are permitted to close normally instead of being abruptly terminated.
+
+To drain an address, you must move it from the active pool to the drain pool in the same command. If you remove it from the active pool without adding it to the drain pool in a single command, the IP address is deleted from service and existing connections are terminated immediately.
+
+```
+gcloud compute routers nats update NAT_CONFIG \
+    --router=NAT_ROUTER \
+    --region=REGION \
+    --nat-external-ip-pool=IP_ADDRESS3 \
+    --nat-external-drain-ip-pool=IP_ADDRESS2
+```
+
+
+**Switching between Auto and Manual**
+You can switch a Cloud NAT gateway from automatic NAT IP address allocation to manual NAT IP address assignment; however, the NAT IP addresses cannot be preserved. The set of regional external IP addresses that Cloud NAT uses for automatic NAT IP address allocation are different from the set of regional external IP addresses that you can manually choose.
+
+
+## Port allocations
+
+Each NAT IP address on a Cloud NAT gateway offers 64,512 TCP source ports and 64,512 UDP source ports. TCP and UDP each support 65,536 ports per IP address, but Cloud NAT doesn't use the first 1,024 well-known (privileged) ports.
+
+When a Cloud NAT gateway performs source network address translation (SNAT) on a packet sent by a VM, it changes the packet's NAT source IP address and source port.
+
+**Static Port Allocation**
+* You specify a minimum number of ports per VM instance.
+  - `--min-ports-per-vm`: the minimum number of ports to allocate for each VM. If dynamic port allocation is turned on, MIN_PORTS must be a power of 2, and can be between 32 and 32768. Default is 32.
+* works best if all VMs have similar internet usage.
+
+
+**Dynamic Port Allocation**
+* You specify the min/max number of ports per VM instance
+  - `--min-ports-per-vm`: the minimum number of ports to allocate for each VM. If dynamic port allocation is turned on, MIN_PORTS must be a power of 2, and can be between 32 and 32768. Default is 32.
+  - `--max-ports-per-vm`: the maximum number of ports to allocate for each VM. MAX_PORTS must be a power of 2, and can be between 64 and 65536. MAX_PORTS must be greater than MIN_PORTS. Default is 65536.
+* lets the same Cloud NAT gateway allocate different numbers of ports per VM, based on the VM's usage (increase / decrease automatically)
+
+### Port reservation procedure
+
+1. Cloud NAT determines the VM internal IP addresses for which NAT should be performed.
+2. Cloud NAT adjusts the minimum ports per VM instance if necessary.
+3. Cloud NAT reserves NAT source IP address and source port tuples for each VM.
+
+## Logging and monitoring
+
+`--enable-logging` in gcloud or through the console.
+
+`--log-filter=TRANSLATIONS_ONLY | ERRORS_ONLY | ALL` to filter the types of logs that will be generated
+
+Cloud NAT flow logs provides two types of logs:
+* **Translation**: a VM instance initiates a connection that is successfully allocated to a Cloud NAT IP and port and traverses to the internet
+* **Error**: a VM instance attempts to connect to the internet by sending a packet over the connection, but the Cloud NAT gateway can't allocate a Cloud NAT IP and port due to port exhaustion
+
+## Cloud NAT rules
+
+Lets you create access rules that define how Cloud NAT is used to connect to the internet. NAT rules support source NAT based on destination address. When you configure a NAT gateway without NAT rules, the VMs using that NAT gateway use the same set of NAT IP addresses to reach all internet addresses.
+
+If you need more control over packets that pass through Cloud NAT, you can add NAT rules. A NAT rule defines a match condition and a corresponding action. After you specify NAT rules, each packet is matched with each NAT rule. If a packet matches the condition set in a rule, then the action corresponding to that match occurs.
+
+NAT rules are written in the [Common Expressions Language](https://github.com/google/cel-spec) syntax.
+
+To add Cloud NAT rules the Endpoint-Independant Mapping must be disabled.
+
+**Create a NAT rule**
+
+The following example configuration steps fulfill the following conditions:
+
+  * VMs must use NAT IP address with resource name _IP_ADDRESS1_ to send traffic to destination `198.51.100.10`.
+  * VMs must use NAT IP address with resource name `IP_ADDRESS2` or `IP_ADDRESS3` to send traffic to `198.51.100.20/30`.
+
+First add a NAT rule that sends traffic from _IP_ADDRESS1_ to `198.51.100.10`
+
+```
+gcloud compute routers nats rules create NAT_RULE_NUMBER \
+    --router=ROUTER_NAME \
+    --nat=NAT_NAME \
+    --match='destination.ip == "198.51.100.10"' \
+    --source-nat-active-ips=[IP_ADDRESS1] \
+    [--region=REGION] [GLOBAL-FLAG ...]
+```
+
+Next, add a NAT rule that sends traffic from _IP_ADDRESS2_ or _IP_ADDRESS3_ to `198.51.100.20/30`.
+
+```
+gcloud compute routers nats rules create NAT_RULE_NUMBER \
+    --router=ROUTER_NAME \
+    --nat=NAT_NAME \
+    --match='inIpRange(destination.ip, "198.51.100.20/30")' \
+    --source-nat-active-ips=[IP_ADDRESS2],[IP_ADDRESS3] \
+    [--region=REGION] [GLOBAL-FLAG ...]
+```
+
+**Create a NAT gateway using a NAT rule file**
+
+Nat Rule file:
+
+```
+rules:
+ - ruleNumber: 100
+   match: destination.ip == '198.51.100.10'
+   action:
+     sourceNatActiveIps:
+     -  /projects/PROJECT ID/regions/REGION/addresses/IP_ADDRESS1
+ - ruleNumber: 200
+   match: inIpRange(destination.ip, '198.51.100.20/30')
+   action:
+     sourceNatActiveIps:
+     -  /projects/PROJECT ID/regions/REGION/addresses/IP_ADDRESS2
+     -  /projects/PROJECT ID/regions/REGION/addresses/IP_ADDRESS3
+```
+
+```
+gcloud compute routers nats create NAT_NAME \
+    --router=ROUTER_NAME \
+    --nat-external-ip-pool=[IP_ADDRESS4],[IP_ADDRESS5] \
+    --nat-all-subnet-ip-ranges \
+    --rules=PATH_TO_NAT_RULE_FILE \
+    [--region=REGION] [GLOBAL-FLAG ...]
+```
+
+## Restrictions per organization policy constraints
+
+Network administrators can create Cloud NAT configurations and specify which subnetworks (subnets) can use the gateway.
+
+An Organization Policy Administrator (`roles/orgpolicy.policyAdmin`) can use the `constraints/compute.restrictCloudNATUsage` constraint to limit which subnets can use Cloud NAT.
+
+**Interactions between allowed and denied values**
+
+* If a `restrictCloudNatUsage` constraint is configured but neither `allowedValues` nor `deniedValues` is specified, everything is allowed.
+* If `allowedValues` is configured and `deniedValues` is not configured, everything not specified in `allowedValues` is denied.
+* If `deniedValues` is configured and `allowedValues` is not configured, everything not specified in `deniedValues` is allowed.
+* If both `allowedValues` and `deniedValues` are configured, everything not specified in `allowedValues` is denied.
+* If two values conflict, `deniedValues` takes precedence.
+
+**Interactions between allowed and denied values**
+
+Constraints do not prevent subnets from using a NAT gateway. Instead, constraints prevent a configuration that would violate the constraint by preventing the creation of either a gateway or a subnet.
+
+
+
 </details>
 <details>
 <summary> 3.6  Configuring network packet inspection. </summary>
@@ -1607,9 +3112,42 @@ Adding authorized networks for cluster control plane endpoints
 <details>
 <summary> 4.1 Configuring Cloud Interconnect. </summary>
 
-    ●  Dedicated Interconnect connections and VLAN attachments
+## Dedicated Interconnect connections and VLAN attachments
 
-    ●  Partner Interconnect connections and VLAN attachments
+```
+gcloud compute interconnects attachments dedicated create my-attachment \
+    --region us-central1 \
+    --router my-router \
+    --interconnect my-interconnect
+```
+
+For the BGP peering IP addresses, Google allocates unused IP addresses from the link-local IP address space (_169.254.0.0/16_). To constrain the range of IP addresses that Google can select from, you can use the `--candidate-subnets` flag, as shown in the following example.
+
+The BGP IP address range that you specify must be unique among all Cloud Routers in all regions of a VPC network.:
+
+```
+gcloud compute interconnects attachments dedicated create my-attachment \
+    --router my-router \
+    --interconnect my-interconnect \
+    --candidate-subnets 169.254.0.0/29,169.254.10.0/24 \
+    --region us-central1
+```
+
+You can specify a range of up to 16 IP prefixes from the link-local IP address space. All prefixes must reside within 169.254.0.0/16 and must be a /29 or shorter, for example, /28 or /27. An unused /29 is automatically selected from your specified range of prefixes. The address allocation request fails if all possible /29 prefixes are in use by Google Cloud.
+
+To specify a VLAN ID, use the `--vlan` flag, as shown in the following example:
+
+```
+gcloud compute interconnects attachments dedicated create my-attachment \
+    --router my-router \
+    --interconnect my-interconnect \
+    --vlan 5 \
+    --region us-central1
+```
+
+## Partner Interconnect connections and VLAN attachments
+
+
 </details>
 <details>
 <summary> 4.2 Configuring a site-to-site IPsec VPN. </summary>
@@ -1621,11 +3159,222 @@ Adding authorized networks for cluster control plane endpoints
 <details>
 <summary> 4.3 Configuring Cloud Router. </summary>
 
-    ●  Border Gateway Protocol (BGP) attributes (e.g., ASN, route priority/MED, link-local addresses)
+For details on Cloud Router see [here](#cloud-router)
 
-    ●  Custom route advertisements via BGP
+To create a Cloud Router:
 
-    ●  Deploying reliable and redundant Cloud Routers
+```
+gcloud compute routers create ROUTER_NAME_1 \
+   --region=REGION \
+   --network=NETWORK_1 \
+   --asn=PEER_ASN_1
+```
+
+## Border Gateway Protocol (BGP) attributes (e.g., ASN, route priority/MED, link-local addresses)
+
+### BGP Attributes
+
+**Border Gateway Protocol (BGP)** is an exterior gateway routing protocol standardized by the Internet Engineering Task Force (IETF) in RFC 1722. BGP automatically exchanges routing and reachability information among autonomous systems on the internet. Your device is BGP-capable if it can perform BGP routing, which means that you can enable the BGP protocol on it and assign it a BGP IP address and an autonomous system number. To determine if your device supports BGP, see the vendor information for your device or contact your device's vendor.
+
+**ASN**, _Autonomous system number_, is a globally unique ID (GUID) that defines a group of one more IP prefixes run by one or more network operators that maintain a single, clearly defined routing policy. These groups of IP prefixes are known as _autonomous systems_ (**ASes**). Must be a 16-bit or 32-bit private ASN as defined in https://tools.ietf.org/html/rfc6996, for example `--asn=64512`.
+
+**link-local addresses** is a unicast network address that is valid only for communications within the subnetwork that the host is connected to. Link-local addresses are most often assigned automatically with a process known as stateless address autoconfiguration or _link-local_ address autoconfiguration, also known as automatic private IP addressing (APIPA) or auto-IP. _Link-local_ addresses are not guaranteed to be unique beyond their network segment. Therefore, routers do not forward packets with link-local source or destination addresses. IPv4 link-local addresses are assigned from address block `169.254.0.0/16` (`169.254.0.0` through `169.254.255.255`). In IPv6, they are assigned from the block `fe80::/10`.
+
+**route priority**
+
+As per the article [BGP Path Selection](https://networklessons.com/bgp/bgp-attributes-and-path-selection) there are 11 attributes that determine which path is the best to route traffic to and _MED_ is the 6th attribute.
+
+_MED_ can be used to advertise to your neighbors how they should enter your AS.
+_MED_ is exchanged between autonomous systems.
+The lowest _MED_ is the preferred path.
+_MED_ is propagated to all routers within the neighbor AS but not passed along any other autonomous systems.
+
+## BGP authentication
+
+By default, Cloud Router BGP sessions are unauthenticated. However, when you use Cloud Router with certain products, you can optionally configure your BGP sessions to use MD5 authentication.
+
+Use the `--md5-authentication-key=SECRET_KEY` flag to configure MD5 authentication.
+
+To clear the authentication session use the  `--clear-md5-authentication-key` flag.
+
+Use the `gcloud compute routers remove-bgp-peer` command to remove a BGP session with MD5 authentication enabled.
+
+## Configure Bidirectional Forwarding Detection (BFD)
+
+BFD ([RFC 5880](https://tools.ietf.org/html/rfc5880), [RFC 5881](https://tools.ietf.org/html/rfc5881)) is a forwarding path outage detection protocol that is supported by most commercial routers. With BFD for Cloud Router, you can enable BFD functionality inside a BGP session to detect forwarding path outages such as link down events. This capability makes hybrid networks more resilient.
+
+When you peer with Google Cloud from your on-premises network by using Dedicated Interconnect or Partner Interconnect, you can enable BFD for fast detection of link failure and failover of traffic to an alternate link that has a backup BGP session. In this way, BFD provides a high-availability network connectivity path that can respond quickly to link faults.
+
+**BFD Session Establishment**
+
+The following diagram shows a simple network with two routers running BGP and BFD. These numbers represent the BFD session establishment process:
+
+  1. BGP neighbor is set up.
+  2. BGP sends a request to the local BFD process to initiate a BFD neighbor session with the BGP peer/neighbor router.
+  3. The BFD neighbor session with the BGP neighbor router is established.
+
+![BFD Session Establishment](https://cloud.google.com/static/network-connectivity/docs/router/images/bfd-establishment.svg)
+
+
+**BFD during failure event**
+
+The following figure shows what happens when a failure occurs in the network.
+
+In BFD control-only mode, the Cloud Router and your on-premises router periodically send BFD control packets to each other. If the number of control packets in a row configured in the bfd multiplier setting on the Cloud Router is not received by the other router, the session is declared down. Then, the following happens:
+
+  1. A failure in the link occurs between Google Cloud and the on-premises router.
+  2. The BFD neighbor session with the BGP neighbor router is torn down.
+  3. BFD notifies the local BGP process that the BFD neighbor is no longer reachable.
+  4. The local BGP process tears down the BGP neighbor relationship.
+
+If an alternative path is available, the routers immediately start converging on it.
+
+![BFD Failure](https://cloud.google.com/static/network-connectivity/docs/router/images/bfd-during-failure.svg)
+
+Cloud Router implements BFD dampening internally to supress the negative effect of frequent BFD session flaps on BGP. See more details [here](https://cloud.google.com/network-connectivity/docs/router/concepts/bfd#bfd-dampening)
+
+Cloud Router supports an asynchronous mode of operation, where the systems involved periodically send BFD control packets to on another. If a configured number of those packets in a row are not received by the other system, the session is declared to be down.
+
+BFD is disabled by default on Cloud Router and only supports single-hop mode.
+BFD can only be enabled on a provisioned VLAN attachement that uses [Dataplane version 2](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/terminology#dataplaneVersion)
+
+Use the following flags to enable BFD on an existing bgp peer on cloud router
+
+`gcloud compute routers update-bgp-peer`
+
+```
+--bfd-session-initialization-mode=BFD_SESSION_INITIALIZATION_MODE  \
+    --bfd-min-receive-interval=BFD_MIN_RECEIVE_INTERVAL \
+    --bfd-min-transmit-interval=BFD_MIN_TRANSMIT_INTERVAL \
+    --bfd-multiplier=BFD_MULTIPLIER
+```
+
+
+## Custom route advertisements via BGP
+
+With custom route advertisements, you choose which routes Cloud Router advertises to your on-premises router through the Border Gateway Protocol (BGP).
+
+You can specify route advertisements on the Cloud Router or for each BGP session. If you specify advertised routes on the Cloud Router, they apply to all BGP sessions on the Cloud Router. If you specify route advertisements on a BGP session, those advertisements replace the Cloud Router advertisements.
+
+```
+gcloud compute routers create ROUTER_NAME \
+    --project=PROJECT_ID \
+    --network=NETWORK \
+    --asn=ASN_NUMBER \
+    --region=REGION \
+    --advertisement-mode custom \
+    --set-advertisement-groups all_subnets \
+    --set-advertisement-ranges 1.2.3.4,6.7.0.0/16
+```
+
+
+## Deploying reliable and redundant Cloud Routers
+
+## Router appliance
+
+Router appliance is a Network Connectivity Center feature that lets you use a third-party network virtual appliance in Google Cloud. When you use this approach, the appliance can exchange routes with Cloud Router by using Border Gateway Protocol (BGP).
+
+![Example](https://cloud.google.com/static/network-connectivity/docs/network-connectivity-center/images/router-appliance-topology.svg)
+
+Create the Hub
+```
+gcloud network-connectivity hubs create HUB_NAME \
+  --description="DESCRIPTION" \
+  --labels="KEY"="VALUE"
+```
+
+Create the router spoke
+
+```
+gcloud network-connectivity spokes linked-router-appliances create NAME \
+  --hub="HUB_URI" \
+  --description="DESCRIPTION" \
+  --router-appliance=instance="ROUTER_APPLIANCE_URI",ip=IP_ADDRESS \
+  --router-appliance=instance="ROUTER_APPLIANCE_URI_2",ip=IP_ADDRESS_2 \
+  --region=REGION \
+  --labels="KEY"="VALUE" \
+```
+
+* _ROUTER_APPLIANCE_URI_ & _ROUTER_APPLIANCE_URI_2_ :
+  - Is the GCE instance where the router appliance is installed
+  - https://www.googleapis.com/compute/projects/PROJECT_ID/zones/ZONE/instances/INSTANCE_NAME
+
+Example:
+```
+gcloud network-connectivity spokes linked-router-appliances create my-spoke \
+    --hub=my-hub \
+    --description="Test spoke 1" \
+    --router-appliance=instance="https://www.googleapis.com/compute/v1/projects/my-project/zones/us-west1-a/instances/router-app-a",ip=10.0.1.10 \
+    --router-appliance=instance="https://www.googleapis.com/compute/v1/projects/my-project/zones/us-west1-b/instances/router-app-b",ip=10.0.1.11 \
+    --region=us-west1 \
+    --labels="environment"="test"
+    --site-to-site-data-transfer
+```
+
+Create and configure Cloud Router for the Router appliance to exchange routes:
+
+```
+gcloud compute routers create NAME \
+    --region=REGION \
+    --network=NETWORK \
+    --asn=ASN \
+    --project=PROJECT_ID
+```
+
+Crete two redundant interfaces on the Cloud Router
+
+First one:
+```
+gcloud compute routers add-interface NAME \
+    --interface-name=INTERFACE_NAME \
+    --ip-address=IP_ADDRESS \
+    --subnetwork=SUBNET \
+    --region=REGION \
+    --project=PROJECT_ID
+```
+
+Redundant one:
+```
+gcloud compute routers add-interface NAME \
+    --interface-name=INTERFACE_NAME \
+    --ip-address=IP_ADDRESS \
+    --subnetwork=SUBNET \
+    --redundant-interface=REDUNDANT_INTERFACE \
+    --region=REGION \
+    --project=PROJECT_ID
+```
+
+Create the BGP peers for the router appliance:
+
+First one:
+```
+gcloud compute routers add-bgp-peer NAME \
+    --peer-name=PEER_NAME \
+    --interface=INTERFACE \
+    --peer-ip-address=PEER_IP_ADDRESS \
+    --peer-asn=PEER_ASN \
+    --instance=ROUTER_APPLIANCE \
+    --instance-zone=ROUTER_APPLIANCE_ZONE \
+    --region=REGION
+```
+
+Second one:
+```
+gcloud compute routers add-bgp-peer NAME \
+    --peer-name=PEER_NAME \
+    --interface=INTERFACE \
+    --peer-ip-address=PEER_IP_ADDRESS \
+    --peer-asn=PEER_ASN \
+    --instance=ROUTER_APPLIANCE \
+    --instance-zone=ROUTER_APPLIANCE_ZONE \
+    --region=REGION
+```
+
+Use the same above to create 2 BGP peers for the the second router appliance
+
+
+
+
 </details>
 
 # Section 5: Managing, monitoring, and optimizing network operations
