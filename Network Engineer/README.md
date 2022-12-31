@@ -35,7 +35,7 @@ Disaster Recovery (DR) scenerios are based on the business recovery goals and de
 DR Patterns:
 *   **Cold**:
     *   Applies to business with having high RTO / RPO
-    *   No a dditional resources to overcome issues
+    *   No additional resources to overcome issues
     *   Service is stopped until resources are created, started, and ready to receive traffic.
 *   **Warm**:
     *   Applies to businesses with having a medium RTP / RPO
