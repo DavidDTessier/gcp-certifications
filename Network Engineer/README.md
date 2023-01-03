@@ -1002,108 +1002,6 @@ Important Specifications that should be considered when designing you Cloud VPN:
     - **Extensisble Service Proxy (ESP)** in tunnel mode is only supported. ESP in transport mode is not supported.
     - **Network Address Translation Traversal (NAT-T)** is supported.
 
-**Creating a Classic VPN**
-
-1. Create the target gateway object
-```
-gcloud compute target-vpn-gateways create GW_NAME \
-   --network=NETWORK \
-   --region=REGION \
-   --project=PROJECT_ID
-```
-
-2. Create the regional (external) ip
-```
-gcloud compute addresses create GW_IP_NAME \
-   --region=REGION \
-   --project=PROJECT_ID
-```
-
-3. Create three forwarding rules; these rules instruct Google Cloud to send ESP (IPsec), UDP 500, and UDP 4500 traffic to the gateway:
-```
-gcloud compute forwarding-rules create fr-GW_NAME-esp \
-   --load-balancing-scheme=EXTERNAL \
-   --network-tier=PREMIUM \
-   --ip-protocol=ESP \
-   --address=GW_IP_NAME \
-   --target-vpn-gateway=GW_NAME \
-   --region=REGION \
-   --project=PROJECT_ID
-```
-```
-gcloud compute forwarding-rules create fr-GW_NAME-udp500 \
-   --load-balancing-scheme=EXTERNAL \
-   --network-tier=PREMIUM \
-   --ip-protocol=UDP \
-   --ports=500 \
-   --address=GW_IP_NAME \
-   --target-vpn-gateway=GW_NAME \
-   --region=REGION \
-   --project=PROJECT_ID
-```
-```
-gcloud compute forwarding-rules create fr-GW_NAME-udp4500 \
-   --load-balancing-scheme=EXTERNAL \
-   --network-tier=PREMIUM \
-   --ip-protocol=UDP \
-   --ports=4500 \
-   --address=GW_IP_NAME \
-   --target-vpn-gateway=GW_NAME \
-   --region=REGION \
-   --project=PROJECT_ID
-```
-4. Create the tunnel
-
-In the commands, replace the following:
-
-* _TUNNEL_NAME_: a name for the tunnel
-* _ON_PREM_IP_: the external IP address of the peer VPN gateway
-* _IKE_VERS_: 1 for IKEv1 or 2 for IKEv2
-
-**Known issue**: When configuring VPN tunnels to AWS, use the IKEv2 encryption protocol and select fewer transform sets on the AWS side; otherwise, the Cloud VPN tunnel can fail to rekey. For example, select a combination of single Phase 1 and Phase 2 encryption algorithms, integrity algorithms, and DH group numbers.
-This rekeying issue is caused by a large SA payload size for the default set of AWS transform sets. This large payload size results in IP fragmentation of IKE packets on the AWS side, which Cloud VPN does not support.
-
-* _SHARED_SECRET_: your pre-shared key (shared secret). The pre-shared key for the Cloud VPN tunnel must match the one used when you configure the counterpart tunnel on the peer VPN gateway. To generate a cryptographically strong pre-shared key, follow these directions.
-
-For policy-based VPN:
-* _LOCAL_IP_RANGES_: a comma-delimited list of the Google Cloud IP ranges. For example, you can supply the CIDR block for each subnet in a VPC network. This is the left side from the perspective of Cloud VPN.
-* _REMOTE_IP_RANGES_: a comma-delimited list of the peer network IP ranges. This is the right side from the perspective of Cloud VPN.
-
-
-```
-gcloud compute vpn-tunnels create TUNNEL_NAME \
-    --peer-address=ON_PREM_IP \
-    --ike-version=IKE_VERS \
-    --shared-secret=SHARED_SECRET \
-    --local-traffic-selector=LOCAL_IP_RANGES \
-    --remote-traffic-selector=REMOTE_IP_RANGES \
-    --target-vpn-gateway=GW_NAME \
-    --region=REGION \
-    --project=PROJECT_ID
-```
-
-To configure route based VPN tunnel see r[outing options](https://cloud.google.com/network-connectivity/docs/vpn/concepts/choosing-networks-routing#ts-tun-routing) for details:
-
-```
-gcloud compute vpn-tunnels create TUNNEL_NAME \
-    --peer-address=ON_PREM_IP \
-    --ike-version=IKE_VERS \
-    --shared-secret=SHARED_SECRET \
-    --local-traffic-selector=0.0.0.0/0 \
-    --remote-traffic-selector=0.0.0.0/0 \
-    --target-vpn-gateway=GW_NAME \
-    --region=REGION \
-    --project=PROJECT_ID
-```
-5. Create the route
-```
-gcloud compute routes create ROUTE_NAME \
-    --destination-range=REMOTE_IP_RANGE \
-    --next-hop-vpn-tunnel=TUNNEL_NAME \
-    --network=NETWORK \
-    --next-hop-vpn-tunnel-region=REGION \
-    --project=PROJECT_ID
-```
 
 ## Cloud Router
 
@@ -2648,11 +2546,174 @@ $ gcloud compute forwarding-rules create RULE_NAME \
 <details>
 <summary> 3.2 Configuring Google Cloud Armor policies. </summary>
 
-    ●  Security policies
+## Cloud Armor
 
-    ●  Web application firewall (WAF) rules (e.g., SQL injection, cross-site scripting, remote file inclusion)
+Google Cloud's fully distributed managed service to protect your web application against Denial of Service (DoS), Distributed Denial of Service (DDoS), and web application attacks. More specifically, Cloud Armor can protect from the Open Web Application Security Project (OWASP) top 10 attacks. This is the
+list of the top 10 most dangerous attacks targeting web applications. It is a list that is updated by the OWASP every year. It can also mitigate DDoS at scale. Cloud Armor has the following features:
 
-    ●  Attaching security policies to load balancer backends
+  *  _IP-based and geo-based access control_: You can blacklist clients based on IP ranges or from Google's GeoIP maps.
+  * _A pre-configured Web Application Firewall (WAF) policy to block the top 10 OWASP attacks_: You can block intrusion attacks to vulnerable web applications using industry-standard predefined rules. The traffic is inspected at the application level, and for HTTPS traffic, Cloud Armor can host your web application's digital trusted certificate for SSL inspection.
+  * _Adaptive protection through machine learning_: Cloud Armor can adapt to your normal web application traffic to intercept traffic anomalies, and it can suggest policies to mitigate future attacks.
+  * _A fully distributed serverless service_: You do not have to worry about dimensions and scale your Cloud Armor security protection. Your web application traffic is unpredictable by nature. Instead, everything is managed by Google Cloud, and you just focus on the security for your web application, such as the danger of data leakage or not-so-well-managed authentication or authorization.
+
+Cloud Armor is available in two service tiers:
+  * _Standard_ : Pay-as-you-go model that that provides always-on protection from volumetric and protocol DDoS attacks for your global distributed web application. It also includes WAF capabilities against OWASP attacks through pre-configured rules.
+  * _Managed Protection Plus_: Compared with the standard tier, the Managed Protection Plus tier adds Adaptive Protection with machine learning and third- party named IP address lists from security providers such as **Fastly**, **Cloudflare**, and **Imperva**. With Adaptive Protection, you can be alerted of potential attacks, and you can deploy suggested rules to block the attack and therefore secure your web application.
+
+## Security policies
+
+Google Cloud Armor security policies protect your application by providing Layer 7 filtering and by scrubbing incoming requests for common web attacks or other Layer 7 attributes to potentially block traffic before it reaches your load balanced backend services or backend buckets. Each security policy is made up of a set of rules that filter traffic based on conditions such as an incoming request's IP address, IP range, region code, or request headers.
+
+Security policies are available only for backend services of global external HTTP(S) load balancers, global external HTTP(S) load balancer (classic)s, external TCP proxy load balancers, or external SSL proxy load balancers. The load balancer can be in Premium Tier or Standard Tier.
+
+The backends to the backend service can be any of the following:
+  * **Instance groups**
+  * **Zonal network endpoint groups (NEGs)**
+  * **Serverless NEGs**:
+    - One or more App Engine, Cloud Run, or Cloud Functions services
+  * **Internet NEGs for external backends**
+  * **Buckets in Cloud Storage**
+
+Google Cloud Armor also provides advanced network DDoS protection for [External TCP/UDP network load balancer](https://cloud.google.com/load-balancing/docs/network), [protocol forwarding](https://cloud.google.com/armor/docs/load-balancing/docs/protocol-forwarding), and VMs with public IP addresses. For more information about advanced DDoS protection, see [Configure advanced network DDoS protection](https://cloud.google.com/armor/docs/advanced-network-ddos).
+
+Google Cloud Armor security policies are sets of rules that match on attributes from Layer 3 to Layer 7 to protect externally facing applications or services. Each rule is evaluated with respect to incoming traffic.
+
+A Google Cloud Armor security policy rule consists of a match condition and an action to take when that condition is met. Conditions can be as simple as whether the incoming traffic's source IP address matches a specific IP address or CIDR range (also known as IP address allowlist and denylist rules). Alternatively, by using the Google Cloud Armor custom rules language reference, you can create custom conditions that match on various attributes of the incoming traffic, such as the URL path, request method, or request header values.
+
+Rule evaluation order is determined by rule priority, from the lowest number to the highest number.
+
+Each Google Cloud Armor security policy contains a default rule that is matched if none of the higher priority rules are matched or if there are no other rules in the policy. The default rule is automatically assigned a priority of _2147483647_ (INT-MAX), and it is always present in the security policy.
+
+You cannot delete the default rule, but you can modify it. The default action for the default rule is deny, but you can change the action to allow.
+
+Common use cases for security policies can be found [here](https://cloud.google.com/armor/docs/common-use-cases).
+
+The Compute Security Admin (`roles/compute.securityAdmin`) can create and modify Security Policies while the Compute Network Admin (`roles/compute.networkAdmin`) can set the security policy for backend services.
+
+**Configuring Security Policies**
+
+Create the sec policy:
+
+```
+gcloud compute security-policies create NAME [--description=DESCRIPTION]
+        [--file-format=FILE_FORMAT]
+        [--file-name=FILE_NAME | --type=SECURITY_POLICY_TYPE]
+```
+
+Replace:
+  * _NAME_: Name of the security policy to create.
+  * _DESCRIPTION_: An optional, textual description for the security policy.
+  * `--file-format=FILE_FORMAT`:
+      - The format of the file to create the security policy config from. Specify either yaml or json. Defaults to yaml if not specified. Will be ignored if not specified. FILE_FORMAT must be one of: _json_, _yaml_.
+  * `--file-name=FILE_NAME`: The name of the JSON or YAML file to create a security policy config from. Ignored if not provided.
+  * `--type=SECURITY_POLICY_TYPE`:
+      - The type indicates the intended use of the security policy. _SECURITY_POLICY_TYPE_ must be one of: **CLOUD_ARMOR**, **CLOUD_ARMOR_EDGE**.
+
+
+Create the rule:
+
+```
+gcloud compute security-policies rules create PRIORITY --action=ACTION
+        (--expression=EXPRESSION | --src-ip-ranges=[SRC_IP_RANGE,...])
+        [--ban-duration-sec=BAN_DURATION_SEC]
+        [--ban-threshold-count=BAN_THRESHOLD_COUNT]
+        [--ban-threshold-interval-sec=BAN_THRESHOLD_INTERVAL_SEC]
+        [--conform-action=CONFORM_ACTION] [--description=DESCRIPTION]
+        [--enforce-on-key=ENFORCE_ON_KEY]
+        [--enforce-on-key-name=ENFORCE_ON_KEY_NAME]
+        [--exceed-action=EXCEED_ACTION]
+        [--exceed-redirect-target=EXCEED_REDIRECT_TARGET]
+        [--exceed-redirect-type=EXCEED_REDIRECT_TYPE] [--preview]
+        [--rate-limit-threshold-count=RATE_LIMIT_THRESHOLD_COUNT]
+        [--rate-limit-threshold-interval-sec=RATE_LIMIT_THRESHOLD_INTERVAL_SEC]
+        [--redirect-target=REDIRECT_TARGET] [--redirect-type=REDIRECT_TYPE]
+        [--request-headers-to-add=[REQUEST_HEADERS_TO_ADD,...]]
+        [--security-policy=SECURITY_POLICY]
+```
+
+Replace:
+  * _PRIORITY_: The priority of the rule to add. Rules are evaluated in order from highest priority to lowest priority where 0 is the highest priority and 2147483647 is the lowest priority.
+  * `--action=ACTION`: The action to take if the request matches the match condition. _ACTION_ must be one of:
+    - **allow**: Allows the request from HTTP(S) Load Balancing.
+    - **deny-403**: Denies the request from HTTP(S) Load Balancing, with an HTTP response status code of 403.
+    - **deny-404**: Denies the request from HTTP(S) Load Balancing, with an HTTP response status code of 404.
+    - **deny-502**: Denies the request from HTTP(S) Load Balancing, with an HTTP response status code of 503.
+    - **rate-based-ban**: Enforces rate-based ban action from HTTP(S) Load Balancing, based on rate limit options.
+    - **redirect**: Redirects the request from HTTP(S) Load Balancing, based on redirect options.
+    - **redirect-to-recaptcha**: (DEPRECATED) Redirects the request from HTTP(S) Load Balancing, for reCAPTCHA Enterprise assessment. This flag choice is deprecated. Use `--action=redirect` and `--redirect-type=google-recaptcha` instead.
+    - **throttle**: Enforces throttle action from HTTP(S) Load Balancing, based on rate limit options.
+  * `--expression=EXPRESSION`: The Cloud Armor rules language expression to match for this rule.
+  * `--src-ip-ranges=[SRC_IP_RANGE,...]`: The source IPs/IP ranges to match for this rule. To match all IPs specify *.
+  * `--security-policy=SECURITY_POLICY` The security policy that this rule belongs to.
+  * **OPTIONAL FLAGS**:
+     - `--ban-duration-sec=BAN_DURATION_SEC`: Can only be specified if the action for the rule is rate-based-ban. If specified, determines the time (in seconds) the traffic will continue to be banned by the rate limit after the rate falls below the threshold.
+     - `--ban-threshold-count=BAN_THRESHOLD_COUNT`: Number of HTTP(S) requests for calculating the threshold for banning requests. Can only be specified if the action for the rule is rate-based-ban. If specified, the key will be banned for the configured. _BAN_DURATION_SEC_ when the number of requests that exceed the _RATE_LIMIT_THRESHOLD_COUNT_ also exceed this _BAN_THRESHOLD_COUNT_.
+     - `--ban-threshold-interval-sec=BAN_THRESHOLD_INTERVAL_SEC`: Interval over which the threshold for banning requests is computed. Can only be specified if the action for the rule is rate-based-ban. If specified, the key will be banned for the configured _BAN_DURATION_SEC_ when the number of requests that exceed the _RATE_LIMIT_THRESHOLD_COUNT_ also exceed this _BAN_THRESHOLD_COUNT_.
+    - `--conform-action=CONFORM_ACTION`: Action to take when requests are under the given threshold. When requests are throttled, this is also the action for all requests which are not dropped. _CONFORM_ACTION_ must be (currently only one value is supported): **allow**.
+    - `--description=DESCRIPTION`: An optional, textual description for the rule.
+    - `--enforce-on-key=ENFORCE_ON_KEY`: Different key types available to enforce the rate limit threshold limit on, _ENFORCE_ON_KEY_ must be one of:
+        * _ip_: each client IP address has this limit enforced separately
+        * _all_: a single limit is applied to all requests matching this rule
+        * _http-header_: key type takes the value of the HTTP header configured
+          in enforce-on-key-name as the key value
+        * _xff-ip_: takes the original IP address specified in the
+          **X-Forwarded-For** header as the key
+        * _http-cookie_: key type takes the value of the HTTP cookie configured
+          in enforce-on-key-name as the key value
+    - `--enforce-on-key-name=ENFORCE_ON_KEY_NAME`: Determines the key name for the rate limit key. Applicable only for the following rate limit key types:
+        * _http-header_: The name of the HTTP header whose value is taken as the key value.
+        * _http-cookie_: The name of the HTTP cookie whose value is taken as the key value.
+    - `--exceed-action=EXCEED_ACTION`: Action to take when requests are above the given threshold. When a request is denied, return the specified HTTP response code. When a request is redirected, use the redirect options based on `--exceed-redirect-type` and `--exceed-redirect-target` below. **EXCEED_ACTION** must be one of: _deny-403_, _deny-404_, _deny-429_, _deny-502_, _redirect_.
+    - `--exceed-redirect-target=EXCEED_REDIRECT_TARGET`: URL target for the redirect action that is configured as the exceed action when the redirect type is `external-302`.
+    - `--exceed-redirect-type=EXCEED_REDIRECT_TYPE`: Type for the redirect action that is configured as the exceed action. **EXCEED_REDIRECT_TYPE** must be one of: _google-recaptcha_, _external-302_.
+    - `--preview`: If specified, the action will not be enforced.
+    - `--rate-limit-threshold-count=RATE_LIMIT_THRESHOLD_COUNT`: Number of HTTP(S) requests for calculating the threshold for rate limiting requests.
+    - `--rate-limit-threshold-interval-sec=RATE_LIMIT_THRESHOLD_INTERVAL_SEC`: Interval over which the threshold for rate limiting requests is computed.
+    - `--redirect-target=REDIRECT_TARGET`: URL target for the redirect action. Must be specified if the redirect type is _external-302_. Cannot be specified if the redirect type is _google-recaptcha_.
+    - `--redirect-type=REDIRECT_TYPE`: Type for the redirect action. Default to _external-302_ if unspecified while `--redirect-target` is given. **REDIRECT_TYPE** must be one of: _google-recaptcha_, _external-302_.
+    - `--request-headers-to-add=[REQUEST_HEADERS_TO_ADD,...]`: A comma-separated list of header names and header values to add to requests that match this rule.
+
+Example:
+
+```
+gcloud compute security-policies rules create 1000 \
+            --action deny-403 \
+            --security-policy my-policy \
+            --description "block 1.2.3.0/24" \
+            --src-ip-ranges 1.2.3.0/24
+```
+## Web application firewall (WAF) rules (e.g., SQL injection, cross-site scripting, remote file inclusion)
+
+Google Cloud Armor preconfigured WAF rules are complex web application firewall (WAF) rules with dozens of signatures that are compiled from open source industry standards, [ModSecurity Core Rule Set (CRS)](https://github.com/coreruleset/coreruleset/releases/tag/v3.3.2). Each signature corresponds to an attack detection rule in the ruleset. Google offers these rules as-is. The rules allow Google Cloud Armor to evaluate dozens of distinct traffic signatures by referring to conveniently named rules rather than requiring you to define each signature manually.
+
+Google Cloud Armor preconfigured WAF rules can be tuned to best suit your needs, see [rule tunining](https://cloud.google.com/armor/docs/rule-tuning) for more details.
+
+A request matches a preconfigured WAF rule if the request matches any of the signatures that are associated with the preconfigured WAF rule. A match is made when the _evaluatePreconfiguredWaf()_ or _evaluatePreconfiguredExpr()_ expression returns the value true.
+
+Example:
+
+```
+gcloud compute security-policies rules create 1000 \
+    --security-policy my-policy \
+    --expression "evaluatePreconfiguredExpr('sourceiplist-fastly')" \
+    --action "allow"
+```
+
+```
+gcloud compute security-policies rules create 1000 \
+    --security-policy my-policy \
+    --expression "evaluatePreconfiguredExpr('sqli-canary') && evaluatePreconfiguredExpr('xss-canary')" \
+    --action "deny"
+```
+
+
+Optionally you can enable **Adaptive Protection** using the `--enable-layer7-ddos-defense` flag on the `gcloud compute security-policies create | update` command.
+
+
+## Attaching security policies to load balancer backends
+
+Using `--security-policy CLOUD_ARMOR_POLICY` flag on the `gcloud compute backend-services create | update` command to attach to load balancer backend service.
+
 </details>
 <details>
 <summary> 3.3 Configuring Cloud CDN. </summary>
@@ -2849,21 +2910,301 @@ The use cases outlined [here](https://cloud.google.com/media-cdn/docs/choose-cdn
 <details>
 <summary> 3.4 Configuring and maintaining Cloud DNS. </summary>
 
-    ●  Managing zones and records
+## Cloud DNS
 
-    ●  Migrating to Cloud DNS
+Cloud DNS is a high-performance, resilient, global Domain Name System (DNS) service that publishes your domain names to the global DNS. DNS is a hierarchical distributed database that lets you store IP addresses and other data, and look them up by name. Cloud DNS lets you publish your zones and records in DNS without the burden of managing your own DNS servers and software.
 
-    ●  DNS Security Extensions (DNSSEC)
+### Managing zones and records
 
-    ●  Forwarding and DNS server policies
+Cloud DNS offers both public zones and private managed DNS zones. A public zone is visible to the public internet, while a private zone is visible only from one or more Virtual Private Cloud (VPC) networks that you specify.
 
-    ●  Integrating on-premises DNS with Google Cloud
+**Public Zone**
+A public zone is visible to the internet. You can create DNS records in a public zone to publish your service on the internet. For example, you might create an A record in a public zone called example.com. (note the trailing dot) for your public website www.example.com..
 
-    ●  Split-horizon DNS
+**Private Zone**
+A private zone is any zone that cannot be queried over the public internet.
 
-    ●  DNS peering
+**Records**
+A record is a mapping between a DNS resource and a domain name. Each individual DNS record has a type (name and number), an expiration time (time to live), and type-specific data.
 
-    ●  Private DNS logging
+Some of the commonly used record types are:
+
+  * **A**: Address record, which maps host names to their IPv4 address.
+  * **AAAA**: IPv6 Address record, which maps host names to their IPv6 address.
+  * **CNAME**: Canonical name record, which specifies alias names.
+  * **MX**: Mail exchange record, which is used in routing requests to mail servers.
+  * **NS**: Name server record, which delegates a DNS zone to an authoritative server.
+  * **PTR**: Pointer record, which defines a name associated with an IP address.
+  * **SOA**: Start of authority, used to designate the primary name server and administrator responsible for a zone. Each zone hosted on a DNS server must have an SOA (start of authority) record. You can modify the record as needed (for example, you can change the serial number to an arbitrary number to support date-based versioning).
+
+Cloud DNS creates NS and SOA records for you automatically when you create the zone
+
+**Managed reverse lookup zones**
+Private zone with a special attribute that instructs Cloud DNS to perform a _PTR_ lookup against Compute Engine DNS data.
+
+```
+gcloud dns managed-zones create NAME \
+    --description=DESCRIPTION \
+    --dns-name=DNS_SUFFIX \
+    --networks=VPC_NETWORK_LIST \
+    --visibility=private \
+    --managed-reverse-lookup=true
+```
+
+_DNS_SUFFIX_: must end in `.in-addr.arpa`, typical for is `${ip_block_in_reverse}.in-addr.arpa`
+
+See [here](https://cloud.google.com/dns/docs/zones/zones-overview#ptr_records_in_private_zones) for more details on PTR records for RFX 1918 addresses in private zones.
+
+**Creating a public zone**
+
+```
+gcloud dns managed-zones create NAME \
+    --description=DESCRIPTION \
+    --dns-name=DNS_SUFFIX \
+    --labels=LABELS \
+    --visibility=public
+```
+
+**Creating a private zone**
+
+```
+gcloud dns managed-zones create NAME \
+    --description=DESCRIPTION \
+    --dns-name=DNS_SUFFIX \
+    --networks=VPC_NETWORK_LIST \
+    --labels=LABELS \
+    --visibility=private
+```
+
+* _DNS_SUFFIX_ example: `example.private`
+* _VPC_NETWORK_LIST_: comma seperated list of VPC networks that are authroized to query the zone.
+
+## Scope and Hierarchies
+
+You can create a VPC-scoped or a GKE cluster-scoped DNS zone depending on whether you want DNS names to be visible to the entire VPC network or limit them to a GKE cluster:
+
+  * **VPC scope**. Use this scope when DNS names have to be resolved VPC network-wide. A VPC-scoped DNS zone lets DNS names be available globally to the entire VPC network.
+
+  * **GKE cluster scope**. Cloud DNS lets you create a scope for a single GKE cluster. You can then create one or more private managed zones for each cluster, just like you can for networks. Queries from within that cluster first check to see if the query can be answered by a resource scoped to that specific GKE cluster. If not, queries fall back to normal matching, which starts by checking if the query can be answered by any network-scoped resources.
+
+
+
+## Migrating to Cloud DNS
+
+See https://cloud.google.com/dns/docs/migrating
+
+## DNS Security Extensions (DNSSEC)
+
+Domain Name System Security Extensions (DNSSEC) is a feature of the Domain Name System (DNS) that authenticates responses to domain name lookups. It does not provide privacy protections for those lookups, but prevents attackers from manipulating or poisoning the responses to DNS requests.
+
+There are three places where you must enable and configure DNSSEC for it to protect domains from spoofing and poisoning attacks:
+
+  1. The DNS Zone for your domain must serve special DNSSEC records for public keys (DNSKEY), signatures (RRSIG), and non-existence (NSEC, or NSEC3 and NSEC3PARAM) to authenticate your zone's contents. This is managed by Cloud DNS when DNSSEC is enabled.
+  2. The top-level domain (TLD) registry (for `example.com` this would be `.com`) must have a DS record that authenticates a DNSKEY record in your zone. Do this by activating DNSSec at your domain registrar.
+  3. For full DNSSEC protection, you must use a DNS resolver that _validates_ signatures for DNSSEC-signed domains. You can enable validation for individual systems or your local caching resolvers if you administer your network's DNS services.
+
+More details can be found [here](https://cloud.google.com/dns/docs/dnssec).
+
+Use the `--dnssec-state on` parameter to enable and `dnssec-state off` to disable it when using the `gcloud dns managed-zones create | update` command.
+
+For advanced DNSSEC configuraions, see --> https://cloud.google.com/dns/docs/dnssec-advanced
+
+For migrating DNSSEC-enabled zones, see --> https://cloud.google.com/dns/docs/dnssec-migrate
+
+### Forwarding and DNS server policies
+
+Cloud DNS supports different types of policies. This page provides details about the different policy types and when you can use one or the other.
+
+  * **Server policies** apply private DNS configuration to a Virtual Private Cloud (VPC) network (DNS forwarding, logging).
+    - Use server policies to set up hybrid deployments for DNS resolutions. You can set up an inbound server policy depending on the direction of DNS resolutions. If your workloads plan to use an on-premises DNS resolver, you can set up DNS forwarding zones by using an outbound server policy. On the other hand, if you want your on-premises workloads to resolve names on Google Cloud, you can set up an inbound server policy.
+  * **Response policies** override private DNS responses based on the query name.
+  * **Routing policies** steer/forward traffic based on query (for example, round robin, geolocation).
+
+You can use all three policies at the same time depending on your needs.
+
+**Creating inbound dns server policies**
+
+```
+gcloud dns policies create NAME \
+    --description=DESCRIPTION \
+    --networks=VPC_NETWORK_LIST \
+    --enable-inbound-forwarding
+```
+
+**Creating outbound dns server policies**
+```
+gcloud dns policies create NAME \
+    --description=DESCRIPTION \
+    --networks=VPC_NETWORK_LIST \
+    --alternative-name-servers=ALTERNATIVE_NAMESERVER_LIST \
+    --private-alternative-name-servers=PRIVATE_ALTERNATIVE_NAMESERVER_LIST
+```
+
+* _ALTERNATIVE_NAMESERVER_LIST_: a comma-delimited list of IP addresses that you can use as alternative name servers; private routing is only used for alternative name servers that have RFC 1918 addresses
+* _PRIVATE_ALTERNATIVE_NAMESERVER_LIST_: a comma-delimited list of IP addresses that you can use as alternative name servers, accessed by using private routing
+
+Alternative names server requirements -->https://cloud.google.com/dns/docs/policies#firewall-rules
+
+
+**Create response policies**
+```
+gcloud dns response-policies create RESPONSE_POLICY_NAME \
+    --networks=NETWORK \
+   [--description=DESCRIPTION]
+```
+
+Add rules:
+
+```
+gcloud dns response-policies rules create RESPONSE_POLICY_RULE_NAME \
+  --response-policy=RESPONSE_POLICY_NAME \
+  --dns-name=DNS_NAME \
+  --local-data=name="DNS_NAME.",type="RRTYPE",ttl=TTL,rrdatas="RRDATA"
+```
+
+Replace the following:
+
+  * _RESPONSE_POLICY_RULE_NAME_: a name for the response policy rule that you want to create, such as myresponsepolicyrule
+  * _RESPONSE_POLICY_NAME_: the name of the response policy, such as myresponsepolicy
+  * _DNS_NAME_: the DNS or domain name, such as www.googleapis.com
+  * _TTL_: time to live for the response policy, such as 21600
+  * _RRTYPE_: the resource record type, such as A
+  * _RRDATA_: the resource record data, such as 1.2.3.4. Separate multiple entries with |, such as 1.2.3.4|5.6.7.8.
+
+To create a bypass rule, run the `gcloud dns response-policies rules create` command, and set the `--behavior` flag to _bypassResponsePolicy_
+
+Response policies use cases --> https://cloud.google.com/dns/docs/zones/manage-response-policies#use_cases
+
+**Routing Policies**
+
+DNS routing policies steer traffic based on query (for example, round robin or geolocation). You can configure routing policies by creating special _ResourceRecordSets_ (in the collection sense) with special routing policy values.
+
+To use DNS routing policies, create a _ResourceRecordSet_ and choose one of the following DNS routing policies to apply to the _ResourceRecordSet_:
+
+  * **Weighted round robin (WRR) routing policy** : Use WRR to specify different weights per ResourceRecordSet for the DNS name. DNS routing policies ensure that traffic is distributed according to the configured weights. Combining a WRR routing policy with a geolocation routing policy is not supported.
+  * **Geolocation (GEO) routing policy**: Use GEO to specify source geolocations and to provide answers corresponding to those geographies. The geolocation routing policy applies a nearest match for the source location when the source of the traffic doesn't match any policy items exactly.
+  * **Geofenced routing policy**: Use geofencing to restrict traffic to a specific geolocation even if all endpoints in that geolocation are unhealthy.
+  * **Failover routing policy**: Use to setup active backup configurations.
+
+Creating record set policies:
+
+```
+gcloud dns record-sets create RRSET_NAME \
+    --ttl=TTL \
+    --type=RRSET_TYPE \
+    --zone=MANAGED_ZONE \
+    --routing-policy-type=ROUTING_TYPE \
+    --routing-policy-data=ROUTING_POLICY_DATA \
+    --enable-health-checking
+```
+
+* _ROUTING_TYPE_ can be either **GEO**, **WRR**, or **FAILOVER**.
+
+To setup up _Geofenced Policies_ use the routing type of **GEO** and use the `--enable-geo-fencing` flag.
+
+To setup _Failover policies_ use the routing type of **FAILOVER** and include the following flags:
+  * `--routing-policy-primary-data=ROUTING_POLICY_PRIMARY_DATA`
+  * `--routing-policy-backup-data-type=ROUTING_POLICY_BACKUP_DATA_TYPE`
+  * `--routing-policy-backup-data=ROUTING_POLICY_BACKUP_DATA`
+  * `--backup-data-trickle-ratio=BACKUP_DATA_TRICKLE_RATIO`
+
+* _ROUTING_POLICY_DATA_: the routing policy data
+  - For `--routing-policy-type=WRR`, enter a semicolon-delimited list in the format `${weight_percent}:${rrdatas}`, such as `.8=203.0.113.1;.2=198.51.100.1`. Specify the weight as a non-negative decimal. The ratio of traffic routed to the target is calculated from the ratio of individual weight over the total across all weights. Forwarding rule names are acceptable values and result in health checking.
+  - For `--routing-policy-type=GEO`, enter a semicolon-delimited list in the format `${region}=${IP_address}`, such as `asia-east1=198.51.100.1;us-central1=203.0.113.1`. You can specify multiple IP addresses for a single region by adding IP addresses separated by a comma. Forwarding rule names are acceptable values and result in health checking.
+  - For `--routing-policy-type=FAILOVER`, enter the name of the forwarding rule that you created in the format `${region}=${Forwarding rule name}`.
+* _ROUTING_POLICY_PRIMARY_DATA_: the primary target to use for FAILOVER routing policies. This target must be a reference to one or more forwarding rules, such as forwarding-rule-1. As long as at least one of these forwarding rules is healthy, the IP addresses of all healthy forwarding rules are used to answer queries for this name.
+* _ROUTING_POLICY_BACKUP_DATA_: the backup target to use for FAILOVER routing policies. These targets are used when all forwarding rules specified in --routing-policy-primary-data are unhealthy. Cloud DNS only supports geo-based backup targets. The format of this field matches that of --routing-policy-data when --routing-policy-type = 'GEO', such as asia-east1=forwarding-rule-2.
+* _ROUTING_POLICY_BACKUP_DATA_TYPE_: for FAILOVER routing policies, the type of routing policy the backup data uses. This must be GEO.
+* _BACKUP_DATA_TRICKLE_RATIO_: the ratio of traffic to send to the backup targets, even when the primaries are healthy. The ratio must be between 0 and 1, such as 0.1. The default is set to 0.
+
+Note: When health checks are disabled, the rrdata for WRR or GEO can be RFC 1035 format DNS rrdata.
+When health checks are enabled, the rrdata is a reference to a forwarding rule. Cloud DNS uses the IP address of the forwarding rule as the rrdata. Cloud DNS monitors the health status of the forwarding rule and removes the forwarding rule from the results if it becomes unhealthy.
+
+You must specify both the routing policy type and the routing policy data. If you specify one, you cannot leave the other flag unpopulated.
+
+### Split-horizon DNS
+
+Split horizon is a term used to describe an instance when two zones, one to be used by the internal network and the other to be used by the external network (usually the internet), are created for the same domain. Split-horizon DNS lets you serve different answers (different resource record sets) for the same name depending on who is asking.
+
+For example, you can provide the development/staging version of your app if the query comes from the development network, and the production/public version of your app if the query comes from the public internet.
+
+## DNS peering
+
+DNS peering lets you send requests for records that come from one zone's namespace to another VPC network. For example, a SaaS provider can give a SaaS customer access to DNS records it manages. DNS peering is a one-way relationship. It allows Google Cloud resources in the DNS consumer network to look up records in the peering zone's namespace as if the Google Cloud resources were in the DNS producer network.
+
+Transitive DNS peering is supported, but only through a single transitive hop. In other words, no more than three VPC networks (with the network in the middle being the transitive hop) can be involved. For example, you can create a peering zone in vpc-net-a that targets vpc-net-b, and then create a peering zone in vpc-net-b that targets vpc-net-c.
+
+Roles required to configure DNS peering: `roles/dns.admin` and `roles/dns.peer`
+
+```
+gcloud dns managed-zones create NAME \
+  --description=DESCRIPTION \
+  --dns-name=DNS_SUFFIX \
+  --networks=CONSUMER_VPC_NETWORK \
+  --account=SERVICE_ACCOUNT \
+  --target-network=PRODUCER_VPC_NETWORK \
+  --target-project=PRODUCER_PROJECT_ID \
+  --visibility=private
+```
+
+Replace the following:
+
+  * **NAME**: a name for your zone
+  * **DESCRIPTION**: a description for your zone
+  * **DNS_SUFFIX**: the DNS suffix for your zone, such as example.com
+  * **CONSUMER_VPC_NETWORK**: the name of the consumer VPC network
+  * **SERVICE_ACCOUNT**: [Optional] the service account in the project that contains the consumer VPC network. If you do not add the the service account in the project that contains the consumer VPC network, the gcloud CLI uses the currently active IAM member, as indicated by gcloud auth list.
+  * **PRODUCER_VPC_NETWORK**: the name of the producer VPC network
+  * **PRODUCER_PROJECT_ID**: the ID of the project that contains the producer VPC network
+
+## Cross-project binding
+
+You can create a managed private zone that can be bound to a network that is owned by a different project within the same organization. Instead of specifying the network in the same project, specify the URL of the network in another project under the same organization.
+
+Example: Suppose that you have two projects, _project A_ and _project B_. The VPC network is in _project A._ To make sure that all the VMs in that VPC network are able to resolve the DNS zones in _project B_.
+
+```
+gcloud dns managed-zones create NAME \
+ --dns-name=DNS_SUFFIX \
+ --description="Cross Project Binding" \
+ --visibility=private \
+ --networks=VPC_NETWORK
+```
+
+_VPC_NETWORK_ should be the shared VPC URL that is authorized to query the zone from _project A_, such as https://www.googleapis.com/compute/v1/projects/project-a/global/networks/default.
+
+## DNS logging
+
+**Public Zones**
+
+Use the `--log-dns-queries` to enable dns logs in the `gcloud dns managed-zones create | update` command. To disable logging use the `--no-log-dns-queries`.
+
+**Private Zones**
+```
+gcloud dns policies create|update POLICY_NAME \
+    --networks=NETWORK \
+    --enable-logging \
+    --description=DESCRIPTION
+```
+
+To turn off logging update the policy with the `--no-enable-logging` flag.
+
+Details of log entries can be found [here](https://cloud.google.com/dns/docs/monitoring#dns-log-record-format)
+
+## Work with GKE
+
+Set the `--gkeclusters=GKE_CLUSTER` flag to the fully-qualified resource path of a GKE cluster, such as `projects/my-project/locations/us-east1a/clusters/my-cluster`, when creating the managed dns zone with the `gcloud dns managed-zone create | update` command.
+
+You can also configure the GKE cluster to query a response policy:
+
+```
+gcloud dns response-policies create NAME \
+    --description=DESCRIPTION \
+    --gkeclusters=GKE_CLUSTER
+```
+
+If your GKE cluster is zonal, specify the `--location=LOCATION` which is the same ZONE that the gke cluster resides in, example: `us-east1-a`
+
 </details>
 <details>
 <summary> 3.5 Configuring Cloud NAT. </summary>
@@ -3015,7 +3356,7 @@ If you need more control over packets that pass through Cloud NAT, you can add N
 
 NAT rules are written in the [Common Expressions Language](https://github.com/google/cel-spec) syntax.
 
-To add Cloud NAT rules the Endpoint-Independant Mapping must be disabled.
+To add Cloud NAT rules the _Endpoint-Independant Mapping_ must be disabled.
 
 **Create a NAT rule**
 
@@ -3098,13 +3439,14 @@ Constraints do not prevent subnets from using a NAT gateway. Instead, constraint
 <details>
 <summary> 3.6  Configuring network packet inspection. </summary>
 
-    ●  Packet Mirroring in single and multi-VPC topologies
+Packet Mirroring in single and multi-VPC topologies
 
     ●  Capturing relevant traffic using Packet Mirroring source and traffic filters
 
-    ●  Routing and inspecting inter-VPC traffic using multi-NIC VMs (e.g., next-generation firewall appliances)
+## Routing and inspecting inter-VPC traffic using multi-NIC VMs (e.g., next-generation firewall appliances)
 
-    ●  Configuring an internal load balancer as a next hop for highly available multi-NIC VM routing
+## Configuring an internal load balancer as a next hop for highly available multi-NIC VM routing
+
 </details>
 
 # Section 4: Implementing hybrid interconnectivity
@@ -3113,6 +3455,12 @@ Constraints do not prevent subnets from using a NAT gateway. Instead, constraint
 <summary> 4.1 Configuring Cloud Interconnect. </summary>
 
 ## Dedicated Interconnect connections and VLAN attachments
+
+See details [here](#dedicated)
+
+Your on-prem network must physically meet the Google network in a supported colocation facility (Interconnect connection location). Dedicated Interconnect connections are available from 110 locations in the world. Some of them can also guarantee a less than 5 milliseconds (ms) round-trip latency between virtual machines (VMs) in a specific region and its associated Interconnect connection locations. You can see a representation of a Dedicated Interconnect connection in the following diagram:
+
+![Dedicated Interconnect](images/dedicated-interconnect.png)
 
 ```
 gcloud compute interconnects attachments dedicated create my-attachment \
@@ -3147,14 +3495,241 @@ gcloud compute interconnects attachments dedicated create my-attachment \
 
 ## Partner Interconnect connections and VLAN attachments
 
+See details[here](#partner-interconnect)
+
+If you cannot physically meet the Google
+network in a supported colocation facility, you still have an interconnection option. In this case, though, you should use a third-party service provider (SP) that can connect your on-premises data center to your virtual private cloud (VPC) network in Google Cloud, as shown in the following diagram:
+
+![Partner Interconnect](images/partner-interconnect-simple.png)
+
+VLAN attachments for Partner Interconnect connections (also known as interconnectAttachments) connect your Virtual Private Cloud (VPC) networks with your on-premises network through your service provider's network by allocating VLANs on your service provider's connection.
+
+VLAN attachments support traffic speeds up to 50 Gbps or 6.25 M packets per second (pps) for 100-Gbps connections. Throughput depends on which limit you reach first. For example, if your traffic uses very small packets, you may reach the 6.25 M pps limit before the 50 Gbps limit.
+
+To achieve higher throughput into a VPC network, you must configure multiple VLAN attachments into the VPC network. For each BGP session, you should use the same MED values to let the traffic use equal-cost multipath (ECMP) routing over all the configured VLAN attachments.
+
+_edge availability domain_ (Dedicated Interconnect or Partner Interconnect)
+Each metropolitan area has at least two zones called edge availability domains. These domains provide isolation during scheduled maintenance, which means that two domains in the same metro are not down for maintenance at the same time. This isolation is important when you're building for redundancy.
+
+Edge availability domains span a single metro, not across metros. To maintain availability and an SLA, you must build duplicate Interconnect connections in different edge availability domains in the same metro. For example, building connections in `dfw-zone1-4` and `dfw-zone2-4` provides redundancy across different edge availability domains, whereas building them in `dfw-zone1-4` and `dfw-zone1-505` does not because they are in the same edge availability domain.
+
+Maintenance windows are not coordinated across metros. For example, the edge availability domains `dfw-zone1-4` and `ord-zone1-7` could experience overlapping maintenance events. When connecting to multiple metros for redundancy, it is important to connect to different edge availability domains in each of those metros, as described in the production topology.
+
+```
+gcloud compute interconnects attachments partner create my-attachment \
+    --region us-central1 \
+    --router my-router \
+    --edge-availability-domain availability-domain-1
+```
+
+You can specify the MTU of your attachment. Valid values are 1440 (default) and 1500. To specify an MTU of 1500, use the `--mtu` parameter (`--mtu 1500`)
+
+If you're requesting a Layer 3 connection from your service provider, you can pre-activate the attachment by selecting `--admin-enabled` flag. Activating attachments enables you to confirm that you're connecting to the expected service provider. Pre-activating attachments enables you to skip the activation step and lets the attachments start passing traffic immediately after your service provider completes their configuration.
+
+Once the VLAN attachment is created, your can [request connection](https://cloud.google.com/network-connectivity/docs/interconnect/how-to/partner/requesting-connections) from the service provider.
+
+Update on-prem routers --> https://cloud.google.com/network-connectivity/docs/interconnect/how-to/partner/configuring-onprem-routers
+
 
 </details>
+
 <details>
 <summary> 4.2 Configuring a site-to-site IPsec VPN. </summary>
 
-    ●  High availability VPN (dynamic routing)
+IPSec VPN Details can be found [here](#ipsec-vpn)
 
-    ●  Classic VPN (e.g., route-based routing, policy-based routing)
+## High availability VPN (dynamic routing only)
+
+Create the HA VPN gateway:
+
+```
+gcloud compute vpn-gateways create GW_NAME \
+    --network=NETWORK \
+    --region=REGION  \
+    --stack-type=IP_STACK
+```
+
+_IP_STACK_ : Optional: the IP stack to use. Specify either IPV4_ONLY or IPV4_IPV6. If you do not specify this flag, the default stack type is IPV4_ONLY.
+
+Once the VPN is create you cannot change the STACK-TYPE.
+
+Next create an external VPN gateway resource that provides information to Google Cloud about your peer VPN gateway or gateways. Depending on the high availability recommendations for your peer VPN gateway, you can create external VPN gateway resources for the following different types of on-premises VPN gateways:
+
+```
+gcloud compute external-vpn-gateways create PEER_GW_NAME \
+   --interfaces 0=PEER_GW_IP_0,1=PEER_GW_IP_1
+```
+
+Replace the following:
+
+* _PEER_GW_NAME_: a name representing the peer gateway
+* _PEER_GW_IP_0_: the external IP address for a peer gateway
+* _PEER_GW_IP_1_: the external IP address for another peer gateway
+
+When running the above command, enter the interface ID and IP address for your physical VPN gateway. You can enter 1, 2, or 4 interfaces.
+
+Create the Cloud Router:
+
+```
+gcloud compute routers create ROUTER_NAME \
+    --region=REGION \
+    --network=NETWORK \
+    --asn=GOOGLE_ASN
+```
+
+_GOOGLE_ASN_: any private ASN (64512 through 65534, 4200000000 through 4294967294) that you are not already using in the peer network; the Google ASN is used for all BGP sessions on the same Cloud Router, and it cannot be changed later
+
+Create the VPN tunnel:
+
+```
+gcloud compute vpn-tunnels create TUNNEL_NAME_GW1_IF0 \
+    --peer-gcp-gateway=PEER_GW_NAME \
+    --region=REGION \
+    --ike-version=IKE_VERS \
+    --shared-secret=SHARED_SECRET \
+    --router=ROUTER_NAME \
+    --vpn-gateway=GW_NAME \
+    --interface=INT_NUM_0
+```
+
+In the following commands, replace the following:
+
+* _REGION_: the region where GW_NAME_2 is located
+Optional: The --vpn-gateway-region is the region of the VPN gateway to operate on. Its value should be the same as --region. If not specified, this option is automatically set. This option overrides the default compute/region property value for this command invocation.
+* _TUNNEL_NAME_GW2_IF0_ and _TUNNEL_NAME_GW2_IF1_: a name for each tunnel originating from GW_NAME_2; naming the tunnels by including the gateway interface name can help identify the tunnels later
+* _GW_NAME_1_: the value of `--peer-gcp-gateway`; the value for `--peer-gcp-gateway-region` must be in the same region as the VPN tunnel. If not specified, the value is set automatically. For this example, the region is REGION.
+* _IKE_VERS_: 2 for IKEv2; because these tunnels connect to the two tunnels created in the previous step, they must use the same IKE version (Google recommends using IKEv2). To allow IPv6 traffic, you must use IKEv2.
+* _SHARED_SECRET_: your pre-shared key (shared secret), which must correspond with the pre-shared key for the partner tunnel that you created on each interface of GW_NAME_1; for recommendations, see Generate a strong pre-shared key
+* _GW_NAME_2_: the name of the second gateway that you configured in the gateway configuration step
+* _INT_NUM_0_: the number 0 for the first interface on GW_NAME_2
+* _INT_NUM_1_: the number 1 for the second interface on GW_NAME_2
+If the peer-gcp-gateway is in a different project than the VPN tunnel and local VPN gateway, to specify the project, use the --peer-gcp-gateway option as a full URI or as a relative name. The following sample option is a relative name:
+  * `--peer-gcp-gateway`: projects/other-project/regions/us-central1/vpnGateways/ha-vpn-gw-b
+
+The `--peer-gcp-gateway-region`, which is the region of the peer-side HA VPN gateway to which the VPN tunnel is connected, must be in the same region as the VPN tunnel. If not specified, the region is automatically set.
+
+[HA VPN Topologies](https://cloud.google.com/network-connectivity/docs/vpn/concepts/topologies)
+
+
+**Dynamic Routing**
+Dynamic routing uses a Cloud Router to automatically manage the exchange of routes by using BGP. A BGP interface on a Cloud Router in the same region as the corresponding Cloud VPN tunnel manages this exchange. The Cloud Router adds and removes routes without requiring that the tunnel be deleted and re-created.
+
+The dynamic routing mode of your VPC network controls the behavior of all its Cloud Routers. This mode determines whether the routes learned from your peer network are applied to Google Cloud resources in the same region as the VPN tunnel, or if they are applied in all regions. You control the routes advertised by your peer router or gateway.
+
+The dynamic routing mode also determines whether subnet routes from only the tunnel's region or all regions are shared with your peer router or gateway. In addition to these subnet routes, you can configure custom route advertisements on a Cloud Router.
+
+## Classic VPN (e.g., route-based routing, policy-based routing)
+
+**Creating a Classic VPN**
+
+1. Create the target gateway object
+```
+gcloud compute target-vpn-gateways create GW_NAME \
+   --network=NETWORK \
+   --region=REGION \
+   --project=PROJECT_ID
+```
+
+2. Create the regional (external) ip
+```
+gcloud compute addresses create GW_IP_NAME \
+   --region=REGION \
+   --project=PROJECT_ID
+```
+
+3. Create three forwarding rules; these rules instruct Google Cloud to send ESP (IPsec), UDP 500, and UDP 4500 traffic to the gateway:
+```
+gcloud compute forwarding-rules create fr-GW_NAME-esp \
+   --load-balancing-scheme=EXTERNAL \
+   --network-tier=PREMIUM \
+   --ip-protocol=ESP \
+   --address=GW_IP_NAME \
+   --target-vpn-gateway=GW_NAME \
+   --region=REGION \
+   --project=PROJECT_ID
+```
+```
+gcloud compute forwarding-rules create fr-GW_NAME-udp500 \
+   --load-balancing-scheme=EXTERNAL \
+   --network-tier=PREMIUM \
+   --ip-protocol=UDP \
+   --ports=500 \
+   --address=GW_IP_NAME \
+   --target-vpn-gateway=GW_NAME \
+   --region=REGION \
+   --project=PROJECT_ID
+```
+```
+gcloud compute forwarding-rules create fr-GW_NAME-udp4500 \
+   --load-balancing-scheme=EXTERNAL \
+   --network-tier=PREMIUM \
+   --ip-protocol=UDP \
+   --ports=4500 \
+   --address=GW_IP_NAME \
+   --target-vpn-gateway=GW_NAME \
+   --region=REGION \
+   --project=PROJECT_ID
+```
+4. Create the tunnel
+
+In the commands, replace the following:
+
+* _TUNNEL_NAME_: a name for the tunnel
+* _ON_PREM_IP_: the external IP address of the peer VPN gateway
+* _IKE_VERS_: 1 for IKEv1 or 2 for IKEv2
+
+**Known issue**: When configuring VPN tunnels to AWS, use the IKEv2 encryption protocol and select fewer transform sets on the AWS side; otherwise, the Cloud VPN tunnel can fail to rekey. For example, select a combination of single Phase 1 and Phase 2 encryption algorithms, integrity algorithms, and DH group numbers.
+This rekeying issue is caused by a large SA payload size for the default set of AWS transform sets. This large payload size results in IP fragmentation of IKE packets on the AWS side, which Cloud VPN does not support.
+
+* _SHARED_SECRET_: your pre-shared key (shared secret). The pre-shared key for the Cloud VPN tunnel must match the one used when you configure the counterpart tunnel on the peer VPN gateway. To generate a cryptographically strong pre-shared key, follow these directions.
+
+For policy-based VPN:
+* _LOCAL_IP_RANGES_: a comma-delimited list of the Google Cloud IP ranges. For example, you can supply the CIDR block for each subnet in a VPC network. This is the left side from the perspective of Cloud VPN.
+* _REMOTE_IP_RANGES_: a comma-delimited list of the peer network IP ranges. This is the right side from the perspective of Cloud VPN.
+
+
+```
+gcloud compute vpn-tunnels create TUNNEL_NAME \
+    --peer-address=ON_PREM_IP \
+    --ike-version=IKE_VERS \
+    --shared-secret=SHARED_SECRET \
+    --local-traffic-selector=LOCAL_IP_RANGES \
+    --remote-traffic-selector=REMOTE_IP_RANGES \
+    --target-vpn-gateway=GW_NAME \
+    --region=REGION \
+    --project=PROJECT_ID
+```
+
+To configure route based VPN tunnel see [routing options](https://cloud.google.com/network-connectivity/docs/vpn/concepts/choosing-networks-routing#ts-tun-routing) for details.
+
+```
+gcloud compute vpn-tunnels create TUNNEL_NAME \
+    --peer-address=ON_PREM_IP \
+    --ike-version=IKE_VERS \
+    --shared-secret=SHARED_SECRET \
+    --local-traffic-selector=0.0.0.0/0 \
+    --remote-traffic-selector=0.0.0.0/0 \
+    --target-vpn-gateway=GW_NAME \
+    --region=REGION \
+    --project=PROJECT_ID
+```
+5. Create the route
+```
+gcloud compute routes create ROUTE_NAME \
+    --destination-range=REMOTE_IP_RANGE \
+    --next-hop-vpn-tunnel=TUNNEL_NAME \
+    --network=NETWORK \
+    --next-hop-vpn-tunnel-region=REGION \
+    --project=PROJECT_ID
+```
+
+
+Classic VPN tunnels support _policy-based_ and _route-based static_ routing options. Consider a static routing option only if you cannot use dynamic (BGP) routing or HA VPN.
+
+* Policy-based routing. : Local IP ranges (left side) and remote IP ranges (right side) are defined as part of the tunnel creation process.
+
+* Route-based VPN.: When you use the Google Cloud console to create a route-based VPN, you only specify a list of remote IP ranges. Those ranges are used only to create routes in your VPC network to peer resources.
+
 </details>
 <details>
 <summary> 4.3 Configuring Cloud Router. </summary>
@@ -3379,9 +3954,100 @@ Use the same above to create 2 BGP peers for the the second router appliance
 <details>
 <summary> 5.1 Logging and monitoring with Google Cloud’s operations suite. </summary>
 
-    ●  Reviewing logs for networking components (e.g., VPN, Cloud Router, VPC Service Controls)
+## Reviewing logs for networking components (e.g., VPN, Cloud Router, VPC Service Controls)
 
-    ●  Monitoring networking components (e.g., VPN, Cloud Interconnect connections and interconnect attachments, Cloud Router, load balancers, Google Cloud Armor, Cloud NAT)
+## VPC Service Controls - Audit Logs
+
+Google Cloud Audit Logs helps users answer the question: _Who did what_, _when_, _and where?_. It includes four audit logs for each Google Cloud project, folder, and organization:
+  * **Admin Activity**: Always enabled, it records modifications to configuration or metadata (who added that GCS bucket?).
+  * **System Event**: Always enabled as well, it records GCP non-human admin actions that modify configurations (did automatic scaling occur in a managed instance group?).
+  * **Data Access**: Non-enabled by default, this records calls that read metadata, configurations, or that create, modify, or read user-provided data (who modified that Cloud Storage file?).
+  * **Policy Denied:** Recorded when a Google Cloud service denies access to a user or service account (https://cloud.google.com/iam/docs/service- accounts) because of a security policy violation. They are generated by default and you can't disable them.
+
+
+### VPC Flow Logs
+
+Collect network traffic samples that are sent or received by Compute Engine instances or Google Kubernetes Engine (GKE) nodes. These logs are stored in Cloud Logging and can be used for network monitoring, network forensics, security analysis, and much more. Flow logs are aggregated by connection, and you can export them for further analysis.
+
+Sample Cloud Logging Query:
+
+```
+resource.type='gce_subnetwork' resource.labels.subnetwork_id='588989'
+logName='projects/PROJECT_NAME/logs/compute./googleapis.com%20Fvpc_flows'
+jsonPayload.connection.src_ip='5.91.24.182'
+```
+
+### Firewall Rules Logging
+
+When logs are enabled on firewall rules, the following basic information is reported in Cloud Logging:
+
+| Field | Sub Field | Description |
+| ------ | ---------- | ---------- |
+| connection| src_ip   | Source IP address   |
+| --   | src_port   | Source port number   |
+| --   | dest_ip   | Destination IP address  |
+| --   | dest_port  | Destination port number  |
+| --   | protocol   | Transport  |
+| dispostiion   |   | Connection ALLOWED or DENIED |
+| rule_details  | reference  | Reference to the firewall in the following format: network: {network name} firwall: {firewall_name} |
+
+When you add metadata, the following information will be reported:
+
+* _Rule_details_:
+  a. **Priority**: Number of rule priority
+  b. **Action**: Either DENY or PERMIT
+  c. _source_range[]_: List of source ranges that the firewall rule applies to
+  d. _destination_range[]_: List of destination ranges that the firewall rule applies to
+  e. _ip_port_info[]_: List of IP protocols and applicable port ranges for rules
+  f. **Direction**: Either ingress or egress
+  g. _source_tag[]_: List of all the source tags that the firewall rule applies to
+  h. _target_tag[]_: List of all the target tags that the firewall rule applies to
+  i. _source_service_account[]_: List of all the source service accounts that the firewall rule applies to
+  j. _target_service_account[]_: List of all the target service accounts that the firewall rule applies to: https://cloud.google.com/vpc/docs/ firewall-rules-logging#ruledetails
+* **Instance**:
+  a. _project_id_: Project ID of the VM
+  b. _vm_name_: Name of the VM
+  c. **region**: Region of the VM
+  d. **zone**: Zone of the VM
+* _vpc_:
+  a. _project_id_: ID of the project containing the network
+  b. _vpc_name_: Network on which the VM is operating
+  c. _subnetwork_name_: Subnet on which the VM is operating
+* _remote_instance_: This is the same as the instance field. If the remote endpoint of the connection was a VM located in the Compute Engine instance, this field is populated with VM instance details.
+* _remote_vpc_: This is the same as the vpc field. If the remote endpoint of the connection was a VM that is located in a VPC network, this field is populated with the network details.
+* _remote_location_: If the remote endpoint of the connection was external to the VPC network, the following fields are populated with available location metadata:
+  a. **continent**
+  b. **country**
+  c. **region**
+  d. **city**
+
+## Monitoring networking components (e.g., VPN, Cloud Interconnect connections and interconnect attachments, Cloud Router, load balancers, Google Cloud Armor, Cloud NAT)
+
+## Packet Mirroring
+
+Similar to VPC Flow logs except that it is not based on sampling. Copy of every packet that is flowing in the background between VMs or services is logged. Essentially, Packet Mirroring captures network traffic (both inbound and outbound) from a set of mirrored sources, duplicates it, and sends the copy to collectors. So, the main difference is that Packet Mirroring clones all traffic and packet data, including payloads and headers.
+
+This configuration requires more bandwidth and introduces some aspect of latency and therefore it is recommended to disable it whenever you do not require in-depth understanding of what is happening from the network and security point of view.
+
+**Configuring Packet Mirroring**
+
+The working principle behind Packet Mirroring is based on a Packet Mirroring policy, which you can configure and that contains the following attributes:
+  * Region
+  * VPC network(s)
+  * Mirrored source(s)
+  * Collector (destination)
+    - Must be in the same region as _mirrored sources_, but could be in dfferent zones or even different VPCs
+  * Mirrored traffic (filter)
+    - TCP, UDP, and ICMP traffic only
+
+To create and manage packet mirroring policies, Google Cloud provides two roles that are related to Packet Mirroring:
+
+* `compute.packetMirroringUser` grants users permission to create, update, and delete packet mirroring policies. To use Packet Mirroring, users must have this role in projects where they create packet mirroring policies.
+* `compute.packetMirroringAdmin` grants users permission to mirror particular resources. Even if users have permission to create a packet mirroring policy, they still require permission to mirror related sources. Use this role in projects where the owner of a policy might not have any other permissions, for example, in Shared VPC scenarios.
+
+Setting up Packet Mirroring is decribed [here](https://cloud.google.com/vpc/docs/using-packet-mirroring).
+
+
 </details>
 <details>
 <summary> 5.2 Managing and maintaining security. </summary>
