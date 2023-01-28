@@ -1,0 +1,12 @@
+{
+  "language": "csharp",
+  "app": "dotnet run -p VPNDemo.csproj",
+  "projectId": "54bc22dc-7fc8-4269-83ab-46569be64cf3",
+  "sendCrashReports": "false",
+  "terraformProviders": [],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

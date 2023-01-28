@@ -4,12 +4,12 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <GenerateProgramFile>false</GenerateProgramFile>
+    <AssemblyName>MyTerraformStack</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HashiCorp.Cdktf" Version="0.13.3" />
-    <PackageReference Include="HashiCorp.Cdktf.Providers.Azurerm" Version="4.0.3" />
-    <PackageReference Include="HashiCorp.Cdktf.Providers.Google" Version="4.0.2" />
+    <PackageReference Include="HashiCorp.Cdktf" Version="0.14.3" />
+    <PackageReference Include="HashiCorp.Cdktf.Providers.Google" Version="4.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.2.0" />
     <PackageReference Include="xunit" Version="2.4.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
@@ -23,5 +23,10 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="TF_Stack\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="TF_Stack\AzureStack.cs" />
+    <Compile Remove="TF_Stack\GCPStack.cs" />
+    <Compile Remove="TF_Stack\BaseTerraformStack.cs" />
   </ItemGroup>
 </Project>

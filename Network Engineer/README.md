@@ -127,6 +127,14 @@ GCP Load Balancers are divided into **Global** and **Regional** categories.
   -    Internal TCP/UDP Network LB
   -    Internall HTTP(s) LB
 
+Load balancers supporting both IPv4 and IPv6 are:
+* Global external HTTP(S) Load Balancer
+* Global external HTTP(s) Load Balancer (Classic)
+* External SSL Proxy load balancer
+* External TCP Proxy Load Balancer
+
+See more on IPv6 --> https://cloud.google.com/load-balancing/docs/ipv6
+
 The following image outlines a decision tree on how to choose the appropriate Load Balancer for your workloads.
 
 ![GCP LB Decision Tree](https://cloud.google.com/static/load-balancing/images/choose-lb.svg)
@@ -601,7 +609,7 @@ Allows two or more VPCs to be interconnected even if they belong to different pr
 * Network latency: Traffic remains confined to the Google worldwide network which is engineered for low-latency transport.
 * Network costs: Google charges you an additional cost (as an egress bandwidth price) for whichever traffic uses external IPs, even if your traffic is within the same zone; using VPC Network Peering, you only pay for the regular network pricing.
 
-VPC Peering allows for sharing and exchanging IP routes, subnet routes, or custom routes. Subnet routes are automatically exchanged between VPCs if they do not use privately used public IP addresses.
+VPC Peering allows for sharing and exchanging IP routes, subnet routes, or custom routes. All Subnet routes are automatically exchanged between VPCs if they do not use privately used public IP addresses.
 
 NOTE: overlapping IP's must be avoided between VPCs to allow VPC network peering to be established.
 
@@ -1095,18 +1103,6 @@ If you decide to use L3 Partner Interconnect for your failover design, you are r
 Now that you have been through the best practices for hybrid connectivity designs, it's time to learn how to design and plan container IP addressing for GKE.
 
 
-
-
-    ●  Accessing multiple VPCs from on-premises locations (e.g., Shared VPC, multi-VPC peering topologies)
-
-    ●  Bandwidth and constraints provided by hybrid connectivity solutions
-
-    ●  Accessing Google Services/APIs privately from on-premises locations
-
-    ●  IP address management across on-premises locations and cloud
-
-    ●  DNS peering and forwarding
-
 </details>
 <details>
 <summary> 1.4 Designing an IP addressing plan for Google Kubernetes Engine. </summary>
@@ -1169,18 +1165,68 @@ Additional thoughts should also be put into DNS when it comes to cluster scalabi
 In general, when you design a scalable GKE cluster in order to support your applications, you should be aware of the limitations of Kubernetes. Even if the limitations may seem very high, it is crucial to know all of them in order to avoid performance degradation. Therefore, a clever design approach for a scalable GKE cluster should consider
 the following:
 
-* **Max Pods per Node are 100**:
+* **By default each Node in a GKE cluster is allocated 256 IP address for pods**
+* **Max Pods per Node are 110**:
   - GKE hard limit, gcp recommends not having more than two containers per pod
+  - GKE standard clusters can be configured to allow up to 256 pods per node. 
+  - Auto pilot clusters have a max of 32 pods per node
 * **Total number of services should stay below 10,000**:
   - Perf of [_IPtables_](https://www.tkng.io/services/clusterip/dataplane/iptables/) will be impacted if there are too many services
 * **Total number of Pods behind a single service should stay below 250**:
   - considered a safe threshold to maintain stability on _kube-proxy_ and _etcd_
 * **Total number of services per namespace should not exceed 5,000**:
   - Pods may experience crashes on startup if limit is exceeded
+* **Total Number of Nodes per cluster should not exceed 5,000**
 
 ### IP address planning in GKE
 
+https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips#defaults_limits
+
+
+**IP Address Per Resource**
+| Range | Default Size | Min Size | Max Size | Max # | 
+| ------ | ---------| ---------| ----- | ----- |
+| Nodes | /20 | /29 | /8 | 4,092 (default), 4 (min), 16,77,212 (max) |
+| Pods | /14 | /19 | /9 | 262,144 (default), 8,192 (min), 8,388,608 (max) |
+| Services | /20 | /27 | /16 | 4,096 (default), 32 (min) 65,536 (max) |
+
+* Nodes get their IP address from primary cluster subnet
+* Pods get IPs from Pod IP range, specified a cluster creation and cannot be changed
+* Services get IPs from Service IP range, specified at cluster creation and cannot be changed
+* Services are similar to LBs and expose static IP
+
+
 Google recommdends private clusters and _VPC-native_ networking.
+
+GKE IPv4 addressing optimization: --> https://cloud.google.com/kubernetes-engine/docs/archive/gke-address-management-options
+
+**Calculations**
+
+Calculate the max nodes, _N_, at a given netmask can support. Use _S_ for the size of the netmask, whose valid range is between 8 and 29, inclusive.
+`N = 2(32-S) - 4`
+
+Calculate the size of the netmask, S, required to support a maximum of N nodes:
+`S = 32 - ⌈log2(N + 4)⌉`
+
+If you change the max # of pods per node, use the following caclulations:
+
+1. Calculate the size of the netmask of each node's Pod range, _M_:
+`M = 31 - [log2(Q)]` where _Q_ is the number of Pods per node, [] is the ceiling
+
+2. Calculate the maximum number of nodes, _N_, that the subnet's secondary IP address range for Pods can support:
+`N = 2(M - S)` where:
+  * _M_ is the size of the netmask of each node's alias IP address range for Pods, calculated in the first step
+  * _S_ is the size of the subnet mask of the subnet's secondary IP address range
+3. Calculate the maximum number of Pods, _P_, that the subnet's secondary IP address range for Pods can support --> `P = N × Q` where:
+  * _N_ is the maximum number of nodes, calculated in the previous step
+  * _Q_ is the number of Pods per node
+
+
+
+**Route-based Clusters**
+  * A routes-based cluster has a range of IP addresses that are used for Pods and Services. Even though the range is used for both Pods and Services, it is called the Pod address range. The last `/20` of the Pod address range is used for Services.To calculate the IP reserved for GKE Services, calculate the POD IP Addresses range start and end example: 10.96.0.0/16 :
+    * start 10.96.0.0- end 10.96.255.255. 
+    * The Service range uses the last `/20` of the Pod IP Address range, which is `10.96.240.0-10.96.255.255`. You can calculate this by knowing that a `/20` = 4096 IP Addresses, which is 16 x /24 addresses. So take the last subnet (`10.96.255.0/24`) and subtract 16 from 255 to get `10.96.239.0/24` which is the last Pod address range. So `10.96.240.0/20` is the Service IP range.
 
 **VPC-native** clusters have several benefits:
   * Pod IP addresses are natively routable within the cluster's VPC network and other VPC networks connected to it by VPC Network Peering.
@@ -1196,11 +1242,80 @@ Planning the IP address should follow these recommendations:
   * Node subnet should accomodate the maximum number of Nodes expected in the cluster. A _cluster autoscaler_ can be used to limit the maximum number of Nodes in the cluster pool
   * Pods and service IPs should be implmenented as secondary ranges of your Node subnet using alias IP addresses in VPC-native Clusters:
     - recommended to use custom mode subnet for Flexibile cidr Ranges
-    - the Pod subnet should be dimensioned on the maximum number of Pods per Node. By default, GKE allocates a `/24` range pe Node, which allows 110 maximum Pods per Node.
+    - the Pod subnet should be dimensioned on the maximum number of Pods per Node. By default, GKE allocates a `/24` range per Node, which allows 110 maximum Pods per Node.
     - Avoid IP address overlapping between GKE subnets and on-premises subnets, Google recommends using the `100.64.0.0/10` (RFC 6598) range, which avoids interoperability issues
     - Recommended to use a seperate subnet for internal TCP/UDP loadbalancing if GKE services are being exposed. This allows you to improve security on the traffic to and from your GKE services.
 
 NOTE: The maximum number of pods per Node in an Autopilot cluster is _32_ with a `/26` range for each Node, and these settings CANNOT be changed.
+
+### IP Masquerading
+
+IP masquerading is a form of source network address translation (SNAT) used to perform many-to-one IP address translations. GKE can use IP masquerading to change the source IP addresses of packets sent from Pods. When IP masquerading applies to a packet emitted by a Pod, GKE changes the packet's source address from the Pod IP to the underlying node's IP address. Masquerading a packet's source is useful when a recipient is configured to receive packets only from the cluster's node IP addresses.
+
+On Linux nodes, GKE configures _iptables_ rules. GKE uses the **ip-masq-agent** DaemonSet to configure the appropriate dataplane. IP masquerading is not supported with Windows Server node pools.
+
+[How IP Masquerading works in GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/ip-masquerade-agent#how_ipmasq_works)
+
+### GKE Cluster using Shared VPC
+
+In the host project create secondary subnets for Pods and Services:
+
+```
+gcloud compute networks subnets create tier-1 \
+    --project HOST_PROJECT_ID \
+    --network shared-net \
+    --range 10.0.4.0/22 \
+    --region us-central1 \
+    --secondary-range tier-1-services=10.0.32.0/20,tier-1-pods=10.4.0.0/14
+```
+
+Grant the two services accounts in the service project that will be attached to the shared vpc the Compute Network User role:
+
+GKE : `service-SERVICE_PROJECT@container-engine-robot.iam.gserviceaccount.com`
+Google APIs: `SERVICE_PROJECT@cloudservices.gserviceaccount.com`
+
+policy.yaml:
+
+```
+bindings:
+- members:
+  - serviceAccount:SERVICE_PROJECT_1_NUM@cloudservices.gserviceaccount.com
+  - serviceAccount:service-SERVICE_PROJECT_1_NUM@container-engine-robot.iam.gserviceaccount.com
+  role: roles/compute.networkUser
+etag: ETAG_STRING
+```
+
+Grant :
+
+```
+gcloud compute networks subnets set-iam-policy tier-1 \
+    policy.yaml \
+    --project HOST_PROJECT_ID \
+    --region us-central1
+```
+
+To allow GKE to manage firewall resources in the host project, Grant the GKE Service Account the `Compute Security Admin` role within the host project. NOTE: Bes practice to create a custom IAM role for finer grained control which includes: `compute.networks.updatePolicy`, `compute.firewalls.list`, `compute.firewalls.get`, `compute.firewalls.create`, `compute.firewalls.update`, and `compute.firewalls.delete`.
+
+Fine grained:
+
+```
+gcloud iam roles create ROLE_ID \
+    --title="ROLE_TITLE" \
+    --description="ROLE_DESCRIPTION" \
+    --stage=LAUNCH_STAGE \
+    --permissions=compute.networks.updatePolicy,compute.firewalls.list,\
+    compute.firewalls.get,compute.firewalls.create,\
+    compute.firewalls.update,compute.firewalls.delete \
+    --project=HOST_PROJECT_ID
+
+gcloud projects add-iam-policy-binding HOST_PROJECT_ID \
+    --member=serviceAccount:service-SERVICE_PROJECT_NUM@container-engine-robot.iam.gserviceaccount.com \
+    --role=projects/HOST_PROJECT_ID/roles/ROLE_ID
+```
+
+Each service project's GKE service account (`service-SERVICE_PROJECT_NUM@container-engine-robot.iam.gserviceaccount.com`) must have a binding for the Host Service Agent User (`roles/container.hostServiceAgentUser`) in order to perform network management operations in the host project.
+
+Walkthrough can be found [here](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-shared-vpc)
 
 ### Network Security Design in GKE
 
@@ -1225,6 +1340,77 @@ You can minimize exposure of your cluster's control plan in tow modes:
 If you security is super high you may want to leverage GKE network policies to to have full control of traffic to and from Pods and services. Use the `--enable-network-policy` flag during cluster creation.
 
 Also leverage Cloud Armor to prevent DDoS and web application attacks
+
+### Network Policy
+
+If you want to control traffic flow at the IP address or port level (OSI layer 3 or 4), then you might consider using Kubernetes NetworkPolicies for particular applications in your cluster. NetworkPolicies are an application-centric construct which allow you to specify how a pod is allowed to communicate with various network "entities" (we use the word "entity" here to avoid overloading the more common terms such as "endpoints" and "services", which have specific Kubernetes connotations) over the network. NetworkPolicies apply to a connection with a pod on one or both ends, and are not relevant to other connections.
+
+The entities that a Pod can communicate with are identified through a combination of the following 3 identifiers:
+  * Other pods that are allowed (exception: a pod cannot block access to itself)
+  * Namespaces that are allowed
+  * IP blocks (exception: traffic to and from the node where a Pod is running is always allowed, regardless of the IP address of the Pod or the node)
+
+When defining a pod- or namespace- based NetworkPolicy, you use a selector to specify what traffic is allowed to and from the Pod(s) that match the selector.
+
+Meanwhile, when IP based NetworkPolicies are created, we define policies based on IP blocks (CIDR ranges).
+
+
+
+Sample Network Policy:
+
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 172.17.0.0/16
+            except:
+              - 172.17.1.0/24
+        - namespaceSelector:
+            matchLabels:
+              project: myproject
+        - podSelector:
+            matchLabels:
+              role: frontend
+      ports:
+        - protocol: TCP
+          port: 6379
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/24
+      ports:
+        - protocol: TCP
+          port: 5978
+```
+
+Walkthrough can be found [here](https://cloud.google.com/kubernetes-engine/docs/tutorials/network-policy)
+
+## GKE Dataplane V2
+
+GKE Dataplane V2 is implemented with eBPF (extended Berkeley Packet Filter). 
+As packets arrive at a GKE node, eBPF programs installed in the kernel decide how to route and process the packets. Unlike packet processing with iptables, eBPF programs can use Kubernetes-specific metadata in the packet. This lets GKE Dataplane V2 performantly process network packets in the kernel and report annotated actions back to user space for logging.
+
+The following diagram shows the path of a packet through a node using GKE Dataplane V2 as described in the preceding paragraph:
+
+![GKE Dataplane V2](https://cloud.google.com/static/kubernetes-engine/images/dataplanev2.svg)
+
+Number of nodes per cluster	5000 (GKE)	500(Anthos)	500 (Anthos on BM)
+Number of Pods per cluster	50,000 (GKE)	15,000 (Anthos)	27,500(Anthos on BM)
+Number of LoadBalancer services per cluster	750 (GKE)	500(Anthos)	1,000 (ANthos on BM)
+
+
 
 </details>
 
@@ -1642,6 +1828,10 @@ The following diagram shows the hybrid interconnection we will use as an example
 
 ![Static Route VPN](images/static-route-vpn.png)
 
+If multiple routes have identical destinations, priority is used to determine which route should be used. Lower numbers indicate higher priorities; for example, a route with a priority value of 100 has higher priority than one with a priority value of 200. Highest route priority means the smallest possible non-negative integer. Because zero is the smallest possible non-negative integer, it has the highest priority, `--priority` field.
+
+
+
 * GCP IPSec VPN GW to other IPSec VPN GW (On-Prem, Other clouds)
 * To create a static route its required to specify:
    - a unique name,
@@ -1659,7 +1849,7 @@ gcloud compute routes create ROUTE_NAME \
     NEXT_HOP_SPECIFICATION
 ```
 
-_NEXT_HOP_SPECIFICATION_ represents the next hop for the custom static route. You must specify only one of the following as a next hop. For more information about the different types of next hops, see Static route next hops.
+**NEXT_HOP_SPECIFICATION** represents the next hop for the custom static route. You must specify only one of the following as a next hop. For more information about the different types of next hops, see Static route next hops.
   *   `--next-hop-gateway=default-internet-gateway`: Use this next hop to send traffic outside of the VPC network, including to the Internet or to the IP addresses for Private Google Access.
   *   `--next-hop-instance=INSTANCE_NAME` and `--next-hop-instance-zone=ZONE`: Use this next hop to direct traffic to an existing VM instance by name and zone. Traffic is sent to the primary internal IP address for the VM's network interface located in the same network as the route.
   *   `--next-hop-address=ADDRESS`: Use this next hop to direct traffic to the IP address of an existing VM instance.
@@ -2046,20 +2236,47 @@ Order of evaluation of firewall policies:
 <details>
 <summary> 2.5 Implementing VPC Service Controls. </summary>
 
-    ●  Creating and configuring access levels and service perimeters
+VPC Service Controls improves your ability to mitigate the risk of data exfiltration from Google Cloud services such as Cloud Storage and BigQuery. You can use VPC Service Controls to create perimeters that protect the resources and data of services that you explicitly specify.
 
-    ●  VPC accessible services
+## Creating and configuring access levels and service perimeters
 
-    ●  Perimeter bridges
+## VPC accessible services
 
-    ●  Audit logging
+## Perimeter bridges
 
-    ●  Dry run mode
+## Audit logging
+
+## Dry run mode
+
+Requests that violate the perimeter policy are not denied, only logged. Dry run mode is used to test perimeter configuration and to monitor usage of services without preventing access to resources. Common use cases include:
+  * Determining the impact that changes to existing service perimeters will have.
+  * Previewing the impact that new service perimeters will have.
+  * Monitoring requests to protected services that originate from outside a service perimeter. For example, seeing where requests to a given service are coming from, or to identify unexpected service usage in your organization.
+  * In your development environments, creating an analogous perimeter architecture to your production environment. This allows you to identify and mitigate any issues that will be caused by your service perimeters before pushing changes to your production environment.
+
+Service perimeters can exist using dry run mode exclusively. You can also have service perimeters that use a hybrid of enforced and dry run modes.
+
+**Creating a perimeter in dry-run mode**
+```
+gcloud access-context-manager perimeters dry-run create NAME \
+  --perimeter-title=TITLE \
+  --perimeter-type=TYPE \
+  --perimeter-resources=PROJECTS \
+  --perimeter-restricted-services=RESTRICTED-SERVICES \
+  --perimeter-ingress-policies=INGRESS-FILENAME.yaml \
+  --perimeter-egress-policies=EGRESS-FILENAME.yaml \
+  [--perimeter-access-levels=LEVELS] \
+  [--perimeter-enable-vpc-accessible-services] \
+  [--perimeter-vpc-allowed-services=ACCESSIBLE-SERVICES] \
+  --policy=POLICY_NAME
+```
+
 </details>
 
 # Section 3: Configuring network services
 <details>
 <summary> 3.1 Configuring load balancing. </summary>
+
 
 
 ### Backend services and network endpoint groups (NEGs)
@@ -2071,7 +2288,7 @@ Order of evaluation of firewall policies:
   - Direct traffic to the correct backends, which are instance groups or network endpoint groups (NEGs).
   - Distribute traffic according to a balancing mode, which is a setting for each backend.
   - Determine which health check is monitoring the health of the backends.
-  - Specify session affinity.
+  - Specify session affinity (https://cloud.google.com/load-balancing/docs/backend-service#client_ip_affinity)
   - Determine whether other services are enabled, including the following services that are only available for certain load balancers:
     * Cloud CDN
     * Google Cloud Armor security policies
@@ -2089,6 +2306,9 @@ Types of NEGs:
 
 **Zonal NEG**:
   - One or more internal IP address endpoints that resolve to either Compute Engine VM instances or GKE Pods.
+  - Zonal NEGs can be used as backends for backend services in a load balancer. When you use a zonal NEG as a backend for a backend service, all other backends in that backend service must also be zonal NEGs of the same type (either all GCE_VM_IP or GCE_VM_IP_PORT). You cannot use instance groups and zonal NEGs as backends in the same backend service.
+  - You can add the same network endpoint to more than one zonal NEG. You can use the same zonal NEG as a backend for more than one backend service.
+  - You cannot use the UTILIZATION balancing mode with zonal NEG backends.
   - _GCE_VM_IP_:
     * IP only: resolves to the primary internal IP address of a Compute Engine VM's NIC
     * Only be use by internal TCP/UDP Load balancers
@@ -2408,7 +2628,7 @@ gcloud compute health-checks create PROTOCOL NAME \
     --healthy-threshold=HEALTHY_THRESHOLD \
     --unhealthy-threshold=UNHEALTHY_THRESHOLD \
     PORT_SPECIFICATION \
-    ADDITIONAL_FLAGS
+    ADDITIONAL_FLAGSk
 ```
 
 Replace the following:
@@ -2441,11 +2661,14 @@ GCP Load Balancers are divided into **Global** and **Regional** categories.
 
 *   **Global**
   -    External HTTP(S) LB
+       - Supports ports 80, 8080, 443
   -    SSL Proxy LB
+       - Supports ports 25,43,110,143,195,443,465,587,700,993,1883, and 5222
   -    TCP Proxy LB
+        - Supports ports 25,43,110,143,195,443,465,587,700,993,1883, and 5222
   -    TCP/UDP Network LB
 *   **Regional**
-  -    Internal TCP/UDP Network LB
+  -    Internal TCP/UDP Network LB --> non-http, pass-through
   -    Internal HTTP(s) LB
 
 The following image outlines a decision tree on how to choose the appropriate Load Balancer for your workloads.
@@ -2541,7 +2764,6 @@ $ gcloud compute forwarding-rules create RULE_NAME \
            --network=default --region=REGION --ports=80-82
 ```
 
-    ●  Accommodating workload increases using autoscaling vs. manual scaling
 </details>
 <details>
 <summary> 3.2 Configuring Google Cloud Armor policies. </summary>
@@ -2991,6 +3213,13 @@ You can create a VPC-scoped or a GKE cluster-scoped DNS zone depending on whethe
 
 ## Migrating to Cloud DNS
 
+Cloud DNS supports the import of [zone files](https://en.wikipedia.org/wiki/Zone_file) in BIND or YAML records format.
+
+```
+gcloud dns record-sets import -z=EXAMPLE_ZONE_NAME
+--zone-file-format path-to-example-zone-file
+```
+
 See https://cloud.google.com/dns/docs/migrating
 
 ## DNS Security Extensions (DNSSEC)
@@ -3019,6 +3248,8 @@ Cloud DNS supports different types of policies. This page provides details about
     - Use server policies to set up hybrid deployments for DNS resolutions. You can set up an inbound server policy depending on the direction of DNS resolutions. If your workloads plan to use an on-premises DNS resolver, you can set up DNS forwarding zones by using an outbound server policy. On the other hand, if you want your on-premises workloads to resolve names on Google Cloud, you can set up an inbound server policy.
   * **Response policies** override private DNS responses based on the query name.
   * **Routing policies** steer/forward traffic based on query (for example, round robin, geolocation).
+
+To change the DNS resolution of an entire VPC network, you would use a **DNS Server Policy**. For a single zone, you would use DNS Forwarding which allows you to configure target name servers for specific zones.
 
 You can use all three policies at the same time depending on your needs.
 
@@ -3448,6 +3679,182 @@ Packet Mirroring in single and multi-VPC topologies
 ## Configuring an internal load balancer as a next hop for highly available multi-NIC VM routing
 
 </details>
+<details>
+<summary> 3.7 Advanced Networking in GCP </summary>
+
+
+
+## Configuring Traffic Director
+
+A _Service Mesh_ is an overlay network within K8S, most well known is Istio, which provides the following:
+  * **Traffic Management** : You can decide how traffic and API calls can be routed across your service mesh. You can easily implement important fault-handling properties in your service mesh, such as circuit breakers, timeouts, and retries. Additionally, you can implement several application deployment testing strategies, such as A/B testing, canary, and so on.
+  * **Security** : Microservice applications can run anywhere. It is fundamental to implement a zero-trust security approach to ensure safe communication. Therefore, Istio manages all aspects of security, from traffic encryption to mutual microservice authentications via digital certificates and auditing.
+  * **Observability**: Monitoring and logging activities are crucial in modern applications, especially those built as microservices. Istio generates service metrics such as latency, error, traffic, and saturation (the golden signals) to monitor application performance. It also generates distributed traces to monitor call flows within a service mesh. Istio generates access logs as well for auditing purposes.
+
+To achieve all this, Istio relies on the Envoy proxies that are deployed along with your application microservices. Indeed, all traffic leaving and entering your mesh is proxied by the Envoys that are actually implementing your application data plane networking. On the other hand, the control plane of your service mesh is implemented by istiod, a daemon running in your Kubernetes cluster that is responsible for the service mesh governance. istiod is composed of three elements, Pilot, Citadel, and Galley, as shown in the Istio architecture in the figure below:
+
+![Istio Architecture](images/istio-arch.png)
+
+As the above describes, _istiod_ implements the control plane of the service mesh, allowing
+a runtime service discovery and configuration, security, and metric. More specifically, these functions are implemented by the Pilot, Citadel, and Galley respectively components, which have been consolidated in istiod in the latest versions.
+The data plane is implemented by the Envoy proxies that are running as sidecar containers inside the pods where the services live. Envoys handle all the traffic coming from outside the mesh, from the service itself or another proxy within the service mesh. All traffic within a service mesh is encrypted and authenticated using mutual Transport Layer Security (mTLS) technology, which guarantees strong security. Istiod provides certificates to Envoys as they appear in the service mesh and acts as a certification authority for certificate validation. Moreover, istiod injects authorization policies to Envoys in order to authorize services to make calls to other services, thus securing the service mesh further.
+
+Istio is great for service running within the same cluster but for inter-cluster communication or on-prem/third-party communication, this is where **Traffic Director** comes into play.
+
+**Traffic Director** is a GCP-managed service that provides configuration and traffic management (load balancing, traffic routing, security, and so on) for services based on various environments, such as Compute Engine instances, Google Kubernetes Engine, on-premises, or other public cloud providers. The key point that Traffic Director introduces is that the control plane (Istiod for clarity) is fully managed in Google Cloud.
+
+![Traffic Directory](https://cloud.google.com/static/traffic-director/images/service-mesh-td.svg)
+
+It directly interacts with Envoys in order to configure, discover, and secure services. Note that you don't need to have the control plane installed on each cluster. This is because Traffic Director integrates all the service mesh control functions in it.
+
+Also TD can control proxy-less [gRPC services](https://grpc.io/docs/ what-is-grpc/introduction/), modern open-source high performance **Remote Procedure Call (RPC)** framework, and thus integrate them into the service mesh. 
+
+[Preparing TD Setup with Envoy](https://cloud.google.com/traffic-director/docs/prepare-for-envoy-setup)
+
+[Setting up TD with Envoy & GCE](https://cloud.google.com/traffic-director/docs/set-up-envoy-http-mesh)
+
+[Setting up TD with GKE & Envoy](https://cloud.google.com/traffic-director/docs/set-up-gke-pods-auto)
+
+
+[Preparing TD for proxyless-gRPC](https://cloud.google.com/traffic-director/docs/prepare-proxyless-grpc)
+
+[Setting up proxyless-gRPC on GCE](https://cloud.google.com/traffic-director/docs/set-up-proxyless-gce)
+
+[Setting up proxyless-gRPC on GKE](https://cloud.google.com/traffic-director/docs/set-up-proxyless-gke)
+
+## Configuring Cloud Service Directory
+
+**Service Directory**, a fully managed cloud service conceived as a single place to publish, discover, and connect services regardless of their environment. 
+
+Service Directory supports services running in Google Cloud Platform, in other cloud providers such as Amazon Web Services, and on-premises as well.
+
+Service Directory has the following features:
+  * **Registration and lookup API**: Service Directory provides a public API that can be used to create and resolve namespaces, services, and endpoints. You will learn more about these later in the chapter.
+  * **Cloud DNS integration:** Service Directory is fully integrated with Google Cloud DNS and therefore services can be available on Virtual Private Cloud (VPC).
+  * **IAM integration**: As with all the other Google Cloud services, you can use Cloud IAM to control service visibility and permissions.
+  * **Cloud Monitoring and Cloud Logging integration**: Service Directory operations can be monitored and logged along with other GCP services.
+
+**Service Directory Architecture**
+
+  * **Endpoint**: This component handles client requests and it is composed of an IP address and a port. The endpoint can be a VM, a container, load balancer, or any entity that is able to respond to a client request. Endpoints can have additional metadata in the form of key-value pairs. However, their scope is within the service.
+  * **Service**: This component is a group of endpoints that provide a set of behaviors. Clients can look up a service by its name (throughout the HTTP/gRPC protocol) and then connect to the endpoint that handles the request. Services live within namespaces.
+  * **Namespace**: This component groups services for better management. It stays in a GCP region and a GCP project, and must have a unique name within them. Even though the namespace is a regional service, the services that are inside the namespace can be anywhere and can be queried from anywhere.
+
+If you want to use DNS queries to look up private services inside your Google Cloud VPC, you can create a _Service Directory zone_, which is a specific Cloud DNS private zone that is authoritative for the Service Directory namespace. If a namespace is attached to a Service Directory zone, then all services within the namespace are visible to all networks in the VPC.
+
+**Configure a Service Directory**
+
+Create a namespace:
+```
+gcloud service-directory namespaces create NAMESPACE \
+   --location REGION
+```
+
+Configuring a service:
+```
+gcloud service-directory services create SERVICE \
+   --annotations KEY_1=VALUE_1,KEY_2=VALUE_2 \
+   --namespace NAMESPACE \
+   --location REGION
+```
+
+Configuring an Endpoint:
+```
+gcloud service-directory endpoints create ENDPOINT \
+   --address IP_ADDRESS \
+   --port PORT_NUMBER \
+   --annotations KEY_1=VALUE_1,KEY_2=VALUE_2 \
+   --service SERVICE \
+   --namespace NAMESPACE \
+   --location REGION
+```
+
+To integrate with CLoud DNS to have a DNS zone backed by Service Directory, use `--service-directory-namespace` flag in the `gcloud dns managed-zones create | update` command like the following command:
+
+```
+gcloud dns managed-zones create SD_ZONE \
+   --dns-name DNS_NAME \
+   --description DESCRIPTION \
+   --visibility private \
+   --networks https://www.googleapis.com/compute/v1/projects/project_ID/global/networks/network \
+   --service-directory-namespace https://servicedirectory.googleapis.com/v1/projects/project_ID/locations/region/namespaces/namespace-name
+```
+
+**KEY_1**,**VALUE_1**,**KEY_2**, **VALUE_2**: key and value string set in pairs.
+
+## Build hub and spoke networks with Network Connectivity Center
+
+**Network Connectivity Center** is composed of one hub and many spokes, one for each Google Cloud network resource you need to interconnect. The hub provides data transfer service across all spokes, thus interconnecting all the on-premises networks attached. Spokes are attached to Google Cloud network resources such as Cloud VPN, Partner Interconnect, Dedicated Interconnect, and the third-party SD-WAN virtual router. You can attach only one resource type to a spoke. However, you can have multiple instances of the same type attached to one spoke. For instance, multiple VLAN attachments of your Dedicated Interconnect can be part of the same spoke.
+
+Network Connectivity Center is a global service and relies on the Google Cloud network to provide instant access and global reachability to your enterprise on-premises networks.
+
+![Network Connectivity Center](images/network-center-hub-spoke.png)
+
+When you start designing your enterprise connectivity with Network Connectivity Center, you should consider the following points:
+  * Only dynamic routing is supported, and you must use BGP to exchange routes with Cloud Router.
+  * Best-path selection on routes received by Cloud Router is done through the BGP Multi Exit Discriminator (MED) attribute.
+  * Only one instance of the hub can exist per VPC. Network resources such as Cloud VPN and VLAN attachments must be within the same VPC.
+  * When using Cloud VPN, only HA VPN tunnels are supported as attachments to a spoke.
+  * VPC peering is supported, and you can peer with the VPC that hosts the hub. Route advertisements are not affected by Network Connectivity Center.
+  * Shared VPC is supported, but you must create the hub in the host project.
+
+![Transit Hub](images/net-center-transit-hub.png)
+
+Permissions:
+  * networkconnectivity.hubs.create
+    Additionally, if you are working in the Google Cloud console:
+    * networkconnectivity.hubs.get
+    * networkconnectivity.hubs.list
+    * networkconnectivity.spokes.list
+    * compute.projects.get
+Roles:
+  * Hub & Spoke Admin (roles/networkconnectivity.hubAdmin)
+  * Hub & Spoke Viewer (roles/networkconnectivity.hubViewer)
+  * Spoke Admin (roles/networkconnectivity.spokeAdmin)
+
+Creating a hub:
+
+```
+  gcloud network-connectivity hubs create HUB_NAME \
+    --description="DESCRIPTION" \
+    --labels="KEY"="VALUE"
+```
+
+Working with Spokes --> https://cloud.google.com/network-connectivity/docs/network-connectivity-center/how-to/working-with-hubs-spokes#working-with-spokes
+
+```
+  gcloud network-connectivity spokes linked-router-appliances create NAME \
+    --hub=HUB_NAME \
+    --description="DESCRIPTION" \
+    --router-appliance=instance="ROUTER_APPLIANCE_URI",ip=IP_ADDRESS \
+    --router-appliance=instance="ROUTER_APPLIANCE_URI_2",ip=IP_ADDRESS_2 \
+    --region=REGION \
+    --labels="KEY"="VALUE" \
+    --site-to-site-data-transfer
+ 
+```
+
+```
+  gcloud network-connectivity spokes linked-interconnect-attachments create SPOKE_NAME \
+    --hub=HUB_NAME \
+    --description="DESCRIPTION" \
+    --interconnect-attachments=VLAN_ATTACHMENT_NAME,VLAN_ATTACHMENT_NAME_2 \
+    --region=REGION \
+    --labels="KEY"="VALUE"
+    --site-to-site-data-transfer
+```
+
+```
+  gcloud network-connectivity spokes linked-vpn-tunnels create SPOKE_NAME \
+    --hub=HUB_NAME \
+    --description="DESCRIPTION" \
+    --vpn-tunnels=TUNNEL_NAME,TUNNEL_NAME_2 \
+    --region=REGION
+    --labels="KEY"="VALUE"
+    --site-to-site-data-transfer
+```
+
+</details>
 
 # Section 4: Implementing hybrid interconnectivity
 
@@ -3461,6 +3868,44 @@ See details [here](#dedicated)
 Your on-prem network must physically meet the Google network in a supported colocation facility (Interconnect connection location). Dedicated Interconnect connections are available from 110 locations in the world. Some of them can also guarantee a less than 5 milliseconds (ms) round-trip latency between virtual machines (VMs) in a specific region and its associated Interconnect connection locations. You can see a representation of a Dedicated Interconnect connection in the following diagram:
 
 ![Dedicated Interconnect](images/dedicated-interconnect.png)
+
+**Provisioning**
+
+1. Order a connection
+
+```
+gcloud compute interconnects create INTERCONNECT_NAME \
+   --customer-name=NAME \
+   --interconnect-type=DEDICATED \
+   --link-type=LINK_TYPE \
+   --location=LOCATION_NAME \
+   --requested-link-count=NUMBER_OF_LINKS \
+  [--noc-contact-email=EMAIL_ADDRESS] \
+  [--description=STRING]
+```
+
+Replace:
+  * **INTERCONNECT_NAME**: a name for the Interconnect connection; this name is displayed in the Google Cloud console and is used by the Google Cloud CLI to reference the connection, such as my-interconnect
+  * **NAME** : the name of your organization to put in the LOA as the party authorized to request a connection
+  * **LINK_TYPE**:
+    * If you want your Interconnect connection to be made up of 10-Gbps circuits, replace LINK_TYPE with **LINK_TYPE_ETHERNET_10G_LR**.
+    * If you want your connection to be made up of 100-Gbps circuits, replace LINK_TYPE with **LINK_TYPE_ETHERNET_100G_LR**.
+  * **LOCATION_NAME**: specifies the location where the Interconnect connection is created; to list the names of locations, see List locations
+  * **NUMBER_OF_LINKS**: number of circuits of type link-type; this field combined with `--link-type` determines your total connection capacity. For example, for 2 x 100-Gbps (200 Gbps) circuits, this number would be 2.
+  * **EMAIL_ADDRESS** and **STRING**: optional; for the NOC contact, you can specify only one email address—you don't need to enter your own address because you are included in all notifications. If you are creating a connection through workforce identity federation, providing an email address with the `‑‑noc-contact-email` flag is required. Workforce identity federation is in Preview.
+
+For redundancy create a second interconnect connect.
+
+Google will email the confirmation and allocates ports for you. Once the allocation is complete, Google generates a [Letter of Authorization and Connecting Facility Assignment (LOA-CFA)](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/terminology#loa).
+
+2. Download the LOA-CFA from the console and send these documents to the vendor so that they can install you connections. Details [here](https://cloud.google.com/network-connectivity/docs/interconnect/how-to/dedicated/retrieving-loas). Once the status of the internconnect changes to _PROVISIONED_, the LOA-CFA is no longer valid, needed, or available in the Google Cloud console.
+
+
+3. [Testing the connection](https://cloud.google.com/network-connectivity/docs/interconnect/how-to/dedicated/testing-connections)
+
+4. Create VLAN attachment(s)
+
+Each VLAN attachments support a maximum bandwith of 50 Gbps in 10 Gbps increments. 
 
 ```
 gcloud compute interconnects attachments dedicated create my-attachment \
@@ -3493,6 +3938,10 @@ gcloud compute interconnects attachments dedicated create my-attachment \
     --region us-central1
 ```
 
+5. Configure on-premise routers
+
+Details [here](https://cloud.google.com/network-connectivity/docs/interconnect/how-to/dedicated/configuring-onprem-routers)
+
 ## Partner Interconnect connections and VLAN attachments
 
 See details[here](#partner-interconnect)
@@ -3501,6 +3950,10 @@ If you cannot physically meet the Google
 network in a supported colocation facility, you still have an interconnection option. In this case, though, you should use a third-party service provider (SP) that can connect your on-premises data center to your virtual private cloud (VPC) network in Google Cloud, as shown in the following diagram:
 
 ![Partner Interconnect](images/partner-interconnect-simple.png)
+
+**Provisioning**
+
+1. Create VLAN Attachments
 
 VLAN attachments for Partner Interconnect connections (also known as interconnectAttachments) connect your Virtual Private Cloud (VPC) networks with your on-premises network through your service provider's network by allocating VLANs on your service provider's connection.
 
@@ -3526,10 +3979,37 @@ You can specify the MTU of your attachment. Valid values are 1440 (default) and 
 
 If you're requesting a Layer 3 connection from your service provider, you can pre-activate the attachment by selecting `--admin-enabled` flag. Activating attachments enables you to confirm that you're connecting to the expected service provider. Pre-activating attachments enables you to skip the activation step and lets the attachments start passing traffic immediately after your service provider completes their configuration.
 
+2. Request a connection
 Once the VLAN attachment is created, your can [request connection](https://cloud.google.com/network-connectivity/docs/interconnect/how-to/partner/requesting-connections) from the service provider.
+
+3. Activiate connections
+
+If you pre-activate the attachments, the attachment is already activated after its configured from the SP. Otherwise verify that the state of the attachment is in a **PENDING_CUSTOMER** status then you can update the attachement to activiate it.
+
+```
+gcloud compute interconnects attachments partner update my-attachment \
+    --region us-central1 \
+    --admin-enabled
+```
+
+4. Configure on-prem routers
+
+Only applies to Layer 2 connections, as the SP configures the BGP on their on-premise routers for Layer 3 connections 
 
 Update on-prem routers --> https://cloud.google.com/network-connectivity/docs/interconnect/how-to/partner/configuring-onprem-routers
 
+
+## Organization Policies
+
+You can use the following constraints when defining your policy:
+
+`constraints/compute.restrictDedicatedInterconnectUsage`
+
+This constraint defines the set of VPC networks that you can use when creating a VLAN attachment using Dedicated Interconnect.
+
+`constraints/compute.restrictPartnerInterconnectUsage`
+
+This constraint defines the set of VPC networks that you can use when creating a VLAN attachment using Partner Interconnect.
 
 </details>
 
@@ -3726,9 +4206,9 @@ gcloud compute routes create ROUTE_NAME \
 
 Classic VPN tunnels support _policy-based_ and _route-based static_ routing options. Consider a static routing option only if you cannot use dynamic (BGP) routing or HA VPN.
 
-* Policy-based routing. : Local IP ranges (left side) and remote IP ranges (right side) are defined as part of the tunnel creation process.
+* Policy-based routing. : Local IP ranges (left side) and remote IP ranges (right side) are defined as part of the tunnel creation process. `--local-traffic-selector` and `--remote-traffic-selector`
 
-* Route-based VPN.: When you use the Google Cloud console to create a route-based VPN, you only specify a list of remote IP ranges. Those ranges are used only to create routes in your VPC network to peer resources.
+* Route-based VPN.: When you use the Google Cloud console to create a route-based VPN, you only specify a list of remote IP ranges. Those ranges are used only to create routes in your VPC network to peer resources. `--local-traffic-selector=0.0.0.0/0` and `--remote-traffic-selector=0.0.0.0/0`
 
 </details>
 <details>
@@ -4059,7 +4539,17 @@ Setting up Packet Mirroring is decribed [here](https://cloud.google.com/vpc/docs
 <details>
 <summary> 5.3 Maintaining and troubleshooting connectivity issues. </summary>
 
-    ●  Draining and redirecting traffic flows with HTTP(S) Load Balancing
+## Draining and redirecting traffic flows with HTTP(S) Load Balancing
+
+To enable connection draining, you set a connection draining timeout on the backend service. The timeout duration must be from 0 to 3600 seconds inclusive. 
+
+```
+gcloud compute backend-services update BACKEND_SERVICE \
+    --global | --region=REGION \
+    --connection-draining-timeout=CONNECTION_TIMEOUT_SECS
+```
+
+
 
     ●  Monitoring ingress and egress traffic using VPC Flow Logs
 
