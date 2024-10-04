@@ -1805,19 +1805,21 @@ When defining each Service Project Admin, a Shared VPC Admin can grant permissio
 
 * Project-level permissions:
   * A Service Project Admin can be defined to have permission to use all subnets in the host project if the Shared VPC Admin grants the role of `compute.networkUser` for the whole host project to the Service Project Admin. The result is that the Service Project Admin has permission to use all subnets in all VPC networks of the host project, including subnets and VPC networks added to the host project in the future.
+  * https://cloud.google.com/vpc/docs/provisioning-shared-vpc#networkuseratproject
 
 * Subnet-level permissions:
   * Alternatively, a Service Project Admin can be granted a more restrictive set of permissions to use only some subnets if the Shared VPC Admin grants the role of `compute.networkUser` for those selected subnets to the Service Project Admin. A Service Project Admin who only has subnet-level permissions is restricted to using only those subnets. After new Shared VPC networks or new subnets are added to the host project, a Shared VPC Admin should review the permission bindings for the compute.networkUser role to ensure that the subnet-level permissions for all Service Project Admins match the intended configuration.
+  * https://cloud.google.com/vpc/docs/provisioning-shared-vpc#networkuseratsubnet
 
 **Network and Security Admins**
-Shared VPC Admins have full control over the resources in the host project, including administration of the Shared VPC network. They can optionally delegate certain network administrative tasks to other IAM members:
-* Network Admin:
+Shared VPC Admins (`compute.xpnAdmin` and `resourcemanager.projectIamAdmin`) have full control over the resources in the host project, including administration of the Shared VPC network. They can optionally delegate certain network administrative tasks to other IAM members:
+* Network Admin (`compute.networkAdmin`):
   * Shared VPC Admin define a Network Admin by granting an IAM member the Network Admin `compute.networkAdmin` role to the host project. Network Admins have full control over all network resources except for firewall rules and SSL certificates. The network admin role does not allow a user to create, start, stop, or delete instances
 * Network User (`compute.networkUser`):
   * Can use VPC networks and subnets that belong to the host project (Shared VPC). For example, a network user can create a VM instance that belongs to a host project network but they cannot delete or create new networks in the host project.
 * Network Viewer (`compute.networkViewer`):
   * Read-only access to all networking resources.
-* Security Admin:
+* Security Admin (`compute.securityAdmin`):
   * A Shared VPC Admin can define a Security Admin by granting an IAM member the Security Admin `compute.securityAdmin` role to the host project. Security Admins manage firewall rules and SSL certificates.
 
 **Project Structure**
@@ -2171,6 +2173,15 @@ Cloud NAT is a distributed, software-defined managed service. It's not based on 
 Cloud NAT implements outbound NAT in conjunction with static routes in your VPC whose next hops are default internet gateway. In a basic configuration, a default route in your VPC network meets this requirement.
 
 Cloud NAT does not implement unsolicited inbound connections from the internet. DNAT is only performed for packets that arrive as responses to outbound packets.
+
+Types:
+* **Public NAT**
+  * Enables private resources (no public ips) to access the internet
+  * Shares a pool of pub IPs assigning them as needed for secure outbound connections
+* **Private NAT**
+  * Facilitates private comms between different networks
+  * Inter-VPC NAT:
+    * Translates address between VPCs conencted to a central hub
 
 **Creating a Cloud Router**
 
@@ -4753,11 +4764,13 @@ gcloud compute packet-mirrorings delete POLICY_NAME \
 
 ### 4.2.b - Designing an effective logging strategy
 
-Cloud Logging allows you to store, search, analyze, monitor, and alert on logging data and events from Google Cloud and Amazon Web Services.
+Cloud Logging is a fully managed service that allows you to store, search, analyze, monitor, and alert on logging data and events from Google Cloud and Amazon Web Services.
 
 Using Cloud Logging includes access to the [BindPlane service](https://bluemedora.com/products/bindplane/bindplane-for-stackdriver/), which you can use to collect logging data from over 150 common application components, on-premises systems, and hybrid cloud systems.
 
-The Logging Agent, an application based on [fluentd](https://www.fluentd.org/), which runs on VMs in order to stream logs into Cloud Logging.
+The [Legacy Logging Agent](https://cloud.google.com/logging/docs/agent/logging?_gl=1*1hxxzo6*_up*MQ..&gclid=Cj0KCQjwjNS3BhChARIsAOxBM6p7uZWJOQBlsjeu7HM1eYG9JE_4jsiKUj-Wr2W7TmfIYEcGzac_v1kaAhMQEALw_wcB&gclsrc=aw.ds), an application based on [fluentd](https://www.fluentd.org/), which runs on VMs in order to stream logs into Cloud Logging.
+
+The [OpsAgent](https://cloud.google.com/logging/docs/agent/ops-agent?_gl=1*1hxxzo6*_up*MQ..&gclid=Cj0KCQjwjNS3BhChARIsAOxBM6p7uZWJOQBlsjeu7HM1eYG9JE_4jsiKUj-Wr2W7TmfIYEcGzac_v1kaAhMQEALw_wcB&gclsrc=aw.ds), is the preferred and primary agent for collecting telemetry from Compute Engine instances
 
 Use structure logging, as shown below:
 
@@ -4809,14 +4822,116 @@ You can write structured logs to Logging in several ways:
 
 * Using the Cloud Logging API to write log entries
   - https://cloud.google.com/logging/docs/samples/logging-write-log-entry
+* Using Cloud Logging client libraries
+  * https://cloud.google.com/logging/docs/reference/libraries
 * Using the Google Cloud CLI to write log entries
-  - `gcloud logging write LOG_NAME '{"key" : "value"} --payload-type=json'`
+  * `gcloud logging write LOG_NAME '{"key" : "value"} --payload-type=json'`
 * Using the BindPlane service to ingest logs
-  - https://docs.bindplane.bluemedora.com/docs/stackdriver#section--how-do-i-find-my-log-data-
-* Supplying serialized JSON objects to the Logging agent
+  * https://docs.bindplane.observiq.com/docs/getting-started
+* Write logs by using an agent (OpsAgent or Legacy Cloud Logging Agent)
+
+App Engine (Standard and Flexibile) has built-in support for writing logs to Cloud Logging.
+
+Google Kubernetes Engine (GKE) node instances have built-in support also for writing to Cloud Logging. [Cloud Operations for GKE](https://cloud.google.com/monitoring/kubernetes-engine/installing) can be enabled on new or existing cluster to add cluster wide logging.
+
+Cloud Run and Cloud Functions (HTTP and Background) have built-in support for writing logs to Cloud Logging.
+
+**Ops Agent**
+
+Requires the `roles/osconfig.osPolicyAssignmentEditor` to install and configure Ops Agent
+
+OpsAgent is the primary agent for collecting telemetry from you compute engine instances. Combines the collection of logs, metrics, and traces into a single process.
+
+Uses [Fluent Bit](https://fluentbit.io/) for logs, which supports high-throughput logging, and the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) for metrics and traces.
+
+Leverages YAML for configuration
+
+Can be installed on Dataproc clusters that use image version 2.2 and later to collect syslog logs and host metrics. 
+
+[Supported OS](https://cloud.google.com/stackdriver/docs/solutions/agents/ops-agent#supported_operating_systems)
+
+[Install OpsAgent](https://cloud.google.com/stackdriver/docs/solutions/agents/ops-agent/install-index)
+
+VM Manager uses OS configuration policies to manage Ops Agent installation. . A configuration policy is applied to a VM by using a mapping called an assignment ID, which looks like the following example:
+`goog-ops-agent-v2-x86-template-1-0-0-ZONE`
+
+Build-in configuration
+```
+logging:
+  receivers:
+    syslog:
+      type: files
+      include_paths:
+      - /var/log/messages
+      - /var/log/syslog
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+metrics:
+  receivers:
+    hostmetrics:
+      type: hostmetrics
+      collection_interval: 60s
+  processors:
+    metrics_filter:
+      type: exclude_metrics
+      metrics_pattern: []
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [hostmetrics]
+        processors: [metrics_filter]
+```
+
+To override the built-in configuration, you add new configuration elements to the user configuration file. Put your configuration for the Ops Agent in the following files:
+
+* For Linux: /etc/google-cloud-ops-agent/config.yaml
+* For Windows: C:\Program Files\Google\Cloud Operations\Ops Agent\config\config.yaml
+
+The `receiver` element contains a set of receivers which describes how to retrieve the logs,for example, by tailing files, by using a TCP port, or from the Windows Event Log.
+
+Each receiver includes a `type` element the following are the valid types:
+* `files`: 
+  * Collect logs by tailling files on disk
+  * Additional Options:
+    * `include_paths`: (Required), list of filesystem paths to read
+    * `exclude_paths`: list of fs paths to exclude
+    * `record_log_file_path`: (true|false), if true then the path to the specific file from which the log record was obtained appears in the output log entry as the value of the
+    * `wildcard_refresh_interval`: The interval at which wildcard file paths in include_paths are refreshed
+* `fluent_forward`: 
+  * (Ops Agent versions 2.12.0 and later)
+  * Collect logs sent via the Fluent Forward protocol over TCP
+  * Additional Options:
+    * `listen_host`: An IP address to listen on. The default value is 127.0.0.1.
+    * `listen_port`: A port to listen on. The default value is 24224.
+* `tcp`:
+  * Ops Agent version 2.3+
+  * Collects logs in JSON by listening to a TCP port
+  * Additional Options:
+    * `format`: Required. Log format. Supported value: json.
+    * `listen_host`: Optional. An IP address to listen on. The default value is 127.0.0.1.
+    * `listen_port`: Optional. A port to listen on. The default value is 5170.
+* Linux Only
+  * `syslog`: 
+    * Collect Syslog messages over TCP or UDP
+    * Additional Options:
+      * `transport_protocol`: Optional. Supported values: tcp, udp. The default is tcp.
+      * `listen_host`: Optional. An IP address to listen on. The default value is 0.0.0.0.
+      * `listen_port`: Optional. A port to listen on. The default value is 5140.
+  * `systemd_journald`
+    * Ops Agent 2.4+
+    * Collect systemd journal logs from the systemd-journald service
+* Windows Only
+  * `windows_even_log`: 
+    * Collect Windows Event Logs using the Windows Event Log API
+    * Additional Options:
+      * `channels`: Required. A list of Windows Event Log channels from which to read logs.
+      * `receiver_version`: Optional. Controls which Windows Event Log API to use. Supported values are 1 and 2. The default value is 1.
+      * `render_as_xml`: Optional. If set to true, then all Event Log fields, except for jsonPayload.Message and jsonPayload.StringInserts, are rendered as an XML document in a string field named jsonPayload.raw_xml. The default value is false. This cannot be set to true when receiver_version is 1.
 
 
-**Logging Agent**
+**Legacy Logging Agent**
 
 Cloud Logging Agent, `google-fluentd`, is a modified version of [fluentd](https://www.fluentd.org/) log data collector.
 
@@ -4829,13 +4944,9 @@ The VM images for Compute Engine and Amazon Elastic Compute Cloud (EC2) don't in
 
 ![Logging Agent](images/logging-agent-operation.png)
 
-The agent is supported on GCP COmpute Engine instances and AWS EC2 instances, which sends logs to an [AWS Connector Project](https://cloud.google.com/monitoring/accounts#account-project) in GCP.
+The agent is supported on GCP Compute Engine instances and AWS EC2 instances, which sends logs to an [AWS Connector Project](https://cloud.google.com/monitoring/accounts#account-project) in GCP.
 
-App Engine (Standard and Flexibile) has built-in support for writing logs to Cloud Logging.
 
-Google Kubernetes Engine (GKE) node instances have built-in support also for writing to Cloud Logging. [Cloud Operations for GKE](https://cloud.google.com/monitoring/kubernetes-engine/installing) can be enabled on new or existing cluster to add cluster wide logging.
-
-Cloud Run and Cloud Functions (HTTP and Background) have built-in support for writing logs to Cloud Logging.
 
 **Install Cloud Logging Agent**
 
@@ -4875,6 +4986,7 @@ windows
 ```
 Restart-Service -Name StackdriverLogging
 ```
+
 #### Log Storage
 
 GCP leverages the _Logs Router_, which checks the log entry against a set of rules to determine which logs to discard, write/ingest/store in Cloud Logging and which logs to route to other destinations using _sinks_. The supported sink destinations are:
@@ -5605,7 +5717,7 @@ NOTE:
   * PAN (Primary Account Number) MUST be unreadible anywhere it is stored.
     * Leverage Cloud DLP to encrypt if needed
 
-SAQ outlines criteria that you must address to comply with PCI DSS.
+Self-Assessment Questionnaire (SAQ) outlines criteria that you must address to comply with PCI DSS.
 
 SAQ Types:
 * A:
