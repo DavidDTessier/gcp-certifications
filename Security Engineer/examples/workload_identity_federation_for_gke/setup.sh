@@ -2,7 +2,7 @@
 
 ## Set up variables
 
-export PROJECT_ID="adroit-anthem-417714"
+export PROJECT_ID=""
 export ZONE=us-east1-b
 
 # Enable applicable APIs
