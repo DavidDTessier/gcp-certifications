@@ -1,7 +1,7 @@
 ![Logo](https://storage.googleapis.com/support-kms-prod/KJcODqWiFwxMZY7ZV8YM7qgrO8Np7gdfa1yk)
 # Google Cloud - Professional Cloud Network Engineer Certification
 
-[^1] A Professional Cloud Network Engineer implements and manages network architectures in Google Cloud. This individual may work on networking or cloud teams with architects who design cloud infrastructure. The Cloud Network Engineer uses the Google Cloud Console and/or command line interface, and leverages experience with network services, application and container networking, hybrid and multi-cloud connectivity, implementing VPCs, and security for established network architectures to ensure successful cloud implementations.
+[^1] A Professional Cloud Network Engineer is responsible for the design, implementation, and management of Google Cloud network infrastructure. This includes designing network architectures for high availability, scalability, resiliency, and security. This individual is skilled in configuring and managing Virtual Private Clouds (VPCs), routing, network security services, load balancing, and Cloud DNS. Additionally, they are proficient in setting up hybrid connectivity through Cloud Interconnect and Cloud VPN. Their expertise extends to diagnosing, monitoring, and troubleshooting network operations by using Google Cloud Observability and the Network Intelligence Center.
 
 The Professional Cloud Network Engineer exam assesses your ability to:
 
@@ -11,14 +11,14 @@ The Professional Cloud Network Engineer exam assesses your ability to:
 *   Implement hybrid interconnectivity
 *   Manage, monitor, and optimize network operations
 
-[Link to the exam guide](https://cloud.google.com/certification/guides/cloud-network-engineer/)
+[Link to the exam guide](https://services.google.com/fh/files/misc/professional_cloud_network_engineer_exam_guide_english.pdf)
 
-# Section 1: Designing, planning, and prototyping a Google Cloud network
+# Section 1: Designing and planning a Google Cloud network (~26% of the exam)
 
 <details>
 <summary> 1.1 Designing an overall network architecture </summary>
 
-## High availability, failover, and disaster recovery strategies
+## Designing for high availability, failover, disaster recovery, and scale
 
 ### Failover and DR Strategy
 
@@ -77,7 +77,7 @@ Sample Disaster Recovery Workflow:
     -   Service Directory service bindings
 
 
-## DNS strategy (e.g., on-premises, Cloud DNS)
+## Designing the DNS topology (e.g., on-premises, Cloud DNS)
 
 Some situations require that DNS remain on-prem to resolve private names that some applications still use, therefore a hybrid solution will need to be established.
 
@@ -96,16 +96,40 @@ Choose a name pattern for corporate resources:
     -   not common, applies to companies that have a small number of services on-premise
 
 
-For hybrid environments the recommendation is for private DNS resolution is to use two separate authoritative DNS systems. Cloud DNS can be use as an authoritative DNS server for the GCP environment, while the existing DNS servers on-premises can still be used as an authoritative DNS server for the on-prem resources, as shown below.
+For hybrid environments the recommendation private DNS resolution is to use two separate authoritative DNS systems. Cloud DNS can be use as an authoritative DNS server for the GCP environment, while the existing DNS servers on-premises can still be used as an authoritative DNS server for the on-prem resources, as shown below.
 
 ![Hybrid DNS](images/hybrid-dns.png)
+
+An alternative approach is to continue using your existing on-premises DNS server for authoritatively hosting all internal domain names. In that case, you can use an alternative name server to forward all requests from Google Cloud through outbound DNS forwarding.
+
+This approach has the following advantages:
+  * You make fewer changes in business processes.
+  * You can continue to use your existing tools.
+  * You can use deny lists to filter individual DNS requests on-premises.
+
+However, it has the following disadvantages:
+  * DNS requests from Google Cloud have higher latency.
+  * Your system relies on connectivity to on-premises environments for DNS operations.
+  * You might find it difficult to integrate highly flexible environments such as autoscaled instance groups.
+  * The system might not be compatible with products such as Dataproc because those products rely on reverse resolution of Google Cloud instance names.
+
+Another approach is to migrate to Cloud DNS as an authoritative service for all domain resolution. You can then use private zones and inbound DNS forwarding to migrate your existing on-premises name resolution to Cloud DNS.
+
+This approach has the following advantages:
+  * You don't need to maintain a high availability DNS service on-premises.
+  * Your system can use Cloud DNS to take advantage of centralized logging and monitoring.
+
+However, it has the following disadvantages:
+  * DNS requests from on-premises have higher latency.
+  * Your system requires a reliable connection to your VPC network for name resolution.
 
 With a two authoritative DNS systems hybrid architecture it is required to configure **forwarding zones** and **server policies**, Cloud DNS provides the two features to allow DNS name lookup between on-prem and GCP environments.
 
 **Forwarding Zones** are used to query DNS records in your on-prem environment for corporate resources. Cloud DNS **does not** sync or cache on-premise records, thus it is important to maintain the on-prem DNS server to be as highly available as possible.
 
-DNS **server policies** allow on-prem hosts to query DNS records in a GCP private DNS environment. Any time a host that is on-prem sends a request to resolve some instance name in gcp.entreprise.com, a inbound DNS forwarding rule in the DNS server policy must be created.
+DNS **server policies** allow on-prem hosts to query DNS records in a GCP private DNS environment. Any time a host that is on-prem sends a request to resolve some instance name in `gcp.example.com`, a inbound DNS forwarding rule in the DNS server policy must be created.
 
+[Hybrid DNS Reference Architecture](https://cloud.google.com/dns/docs/best-practices#reference_architectures_for_hybrid_dns)
 
 ## Load balancing
 
@@ -1302,7 +1326,13 @@ Fine grained:
 gcloud iam roles create ROLE_ID \
     --title="ROLE_TITLE" \
     --description="ROLE_DESCRIPTION" \
-    --stage=LAUNCH_STAGE \
+    --stage=LAUNCH_STAGE \Using Network Topology to visualize throughput and trac ows.
+● Using Connectivity Tests to diagnose route and rewall miscongurations.
+● Using Performance Dashboard to identify packet loss and latency (e.g., Google-wide,
+project scoped).
+● Using Firewall Insights to monitor rule hit count and identify shadowed rules.
+● Using Network Analyzer to identify network failures, suboptimal congurations, and
+utilization warnings.C
     --permissions=compute.networks.updatePolicy,compute.firewalls.list,\
     compute.firewalls.get,compute.firewalls.create,\
     compute.firewalls.update,compute.firewalls.delete \
