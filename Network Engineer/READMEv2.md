@@ -220,7 +220,7 @@ GCP Load Balancers are divided into two high level deployment modes **Applicatio
 * **Application Load Balancer (HTTP/HTTPS)**
     * **External**
         * Global external App Load Balancer
-            * implmented as a managed service on [Google Front Ends (GFEs)](https://cloud.google.com/docs/security/infrastructure/design#google-frontend-service)
+            * implemented as a managed service on [Google Front Ends (GFEs)](https://cloud.google.com/docs/security/infrastructure/design#google-frontend-service)
             * uses open-source [Envoy proxy](https://www.envoyproxy.io/) to support [advanced traffic management](https://cloud.google.com/load-balancing/docs/https/traffic-management-global)
                 * traffic mirroring, weight-based traffic splitting, request/response-based header transformations, and more
         * Class Application Load Balancer
@@ -228,7 +228,7 @@ GCP Load Balancers are divided into two high level deployment modes **Applicatio
             * implemented on GFEs, GFEs are distributed globally and operate together using Google's global network and control plane.
         * Regional external App Load Balancer
             * implemented as a managed service on Envoy proxy
-    * **Inernal**
+    * **Internal**
         * Regional internal App Load Balancer
         * Cross-Region internal App Load Balancer
             * multi-region load balancer that is implemented as a managed service based on the open-source Envoy proxy
@@ -248,7 +248,7 @@ GCP Load Balancers are divided into two high level deployment modes **Applicatio
             * Regional internal proxy Network Load Balancer
             * Cross-Region internal proxy Network Load Balancer
     * **Passthrough Load Balancer**
-        * Passthrough Network Load Balancers Forwards orginal client packets to the backend un-proxied and preserves client source IP addresses. 
+        * Passthrough Network Load Balancers Forwards original client packets to the backend un-proxied and preserves client source IP addresses. 
         * Passthrough Network Load Balancers also support additional protocols like UDP, ESP, and ICMP.
         * SSL decryption is passed to the backend (at a cost of CPU burden)
         * **External**
@@ -308,7 +308,7 @@ https://cloud.google.com/vpc/docs/configure-private-google-access-hybrid
         * Accurate Load Balancing
         * Accurate health checks
         * no double-hop traffic
-        * visbility and traceability
+        * visibility and traceability
 
 ### IP Address Planning
 
@@ -342,7 +342,6 @@ The following table shows the maximum number of nodes you can create give the si
 
 
 Use the following formulas:
-
 * Calculate the max number of nodes (N) that a given netmask (S) can support in the clusters that use the default subnet:
     * `N = 2^(32-S) - 4`
 * Calculate the size of the netmask (S), required to support a maximum of N nodes
@@ -426,7 +425,7 @@ In GKE Autopilot clusters v1.27+ and GKE Standard clusters v1.29+, GKE assigns I
 * Organization Admin
   -  Delegate Network and Sec Admin
 * Compute Network Admin
-    - roles/compute.netowkrAdmin
+    - roles/compute.networkAdmin
     - full control of compute engine networking resources
     - unable to create FW rules, IAM roles, & SSL certificates
 * Compute Security Admin
@@ -464,8 +463,8 @@ VPC Isolation
 * use VPC Service Controls (service perimeter) to create a security boundary
 
 Network Tags
-* abitrary character string added to a _tags_ field in a resource (Compute Engine VM, etc)
-* not a seperate resource
+* arbitrary character string added to a _tags_ field in a resource (Compute Engine VM, etc)
+* not a separate resource
 * one or more tags can be associated with an instance
 * can assign to new VMs at creation time or edit any time
 * only applies to the VPC network that are directly attached to the instance's nics
@@ -475,8 +474,8 @@ Network Tags
 Service Account
 * represents an identity associated with an instance
 * only one service account can be associated with an instance
-* control access to the service account by granting the Service Account User role for other IAM pricinipals
-* cannot be combined/mixed with network tags in firwall rules
+* control access to the service account by granting the Service Account User role for other IAM principals
+* cannot be combined/mixed with network tags in firewall rules
 * recommended for strict control over how fw rules are applied to VMs
 * Supported only at the project level
 * VPC Peering
@@ -485,7 +484,7 @@ Service Account
 
 Tags for firewalls
 * different from network tags
-* reffered to as _secure tags_ in global network firewall policies and regional network firewall policies
+* referred to as _secure tags_ in global network firewall policies and regional network firewall policies
 * not supported at the VPC FW rule level but at the Network FW Policy level
 * Supported at the Org or Project level
 * VPC Peering
@@ -695,10 +694,10 @@ When a connector is created, google automatically generates the following Fw rul
 **Use cases**
 You can use Serverless VPC Access to access resources such as: 
 * Compute Engine VM instances, 
-* Memorystore instances, and any other resources with internal DNS or internal IP address. 
+* MemoryStore instances, and any other resources with internal DNS or internal IP address. 
 
 Some examples are:
-* You use Memorystore to store data for a serverless service.
+* You use MemoryStore to store data for a serverless service.
 * Your serverless workloads use third-party software that you run on a Compute Engine VM.
 * You run a backend service on a Managed Instance Group in Compute Engine and need your serverless environment to communicate with this backend without exposure to the internet.
 * Your serverless environment needs to access data from your on-premises database through Cloud VPN.
@@ -785,7 +784,7 @@ You can also control IPv6 configurations
 
 Two types of VPC:
 * **Standalone**
-    * Standered version,  single VPC
+    * Standard version,  single VPC
     * Modes
         * Custom
             * no subnets created automatically
@@ -802,7 +801,7 @@ Two types of VPC:
             * can also add manually created subnets in regions of your choice but they must be outside the range of `10.128.0.0/9`
             * can be switched to custom mode but its a one-way conversion
             * Considerations
-                * Having subnets in each region is usefull
+                * Having subnets in each region is useful
                 * each predefined IP ranges of subnets do not overlap and would be ideal for different purposes(Cloud VPN connections, etc)
                 * `10.128.0.0/9` CIDR range is part of the commonly used RFC 1918, networks outside of Google Cloud might use an overlapping CIDR range so in this case a Custom mode VPC is more ideal
                 * two auto mode VPC are unable to Peer or connect via Cloud VPN as they would have overlapping IP ranges
@@ -826,11 +825,7 @@ Two types of VPC:
                 * User with custom roles that include the `resourcemanager.projects.get` and `resourcemanager.projects.updateLiens` permissions at the organization level
             * To enforce the `compute.restrictXpnProjectLienRemoval` policy for your organization by running the `resource-manager org-policies enable-enforce` command. 
                 * Replace _ORG_ID_ with the number you determined from the previous step.
-                    * 
-                    ```
-                    gcloud beta resource-manager org-policies enable-enforce \
-      --organization ORG_ID compute.restrictXpnProjectLienRemoval
-                    ```
+                    * `gcloud beta resource-manager org-policies enable-enforce --organization ORG_ID compute.restrictXpnProjectLienRemoval`
         * **Service project**
             * Any project attached to a host project
             * Can only belong to **ONE** host project
@@ -868,12 +863,12 @@ Apply Shared VPC Admin role to an existing IAM principal. Replace _ORG_ID_ with 
 
 **Basic Shared VPC scenario**
 
-![Basic SVPC](images/basic-shared-vpc.png)
+![Basic SVPC](./images/basic-shared-vpc.png)
 
 
 **Hybrid Connectivity With Shared VPC**
 
-![Hybrid Shared VPC](images/hybrid-shared-vpc.png)
+![Hybrid Shared VPC](./images/hybrid-shared-vpc.png)
 
 
 ## Determining how the networks connect based on requirements (e.g., VPC Network Peering, VPC Network Peering with Network Connectivity Center, Private Service Connect).
